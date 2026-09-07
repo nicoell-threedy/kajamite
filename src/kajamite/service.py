@@ -304,7 +304,7 @@ class KnowledgeService:
         }
         if requested.startswith("memory://"):
             path = requested.removeprefix("memory://").lstrip("/")
-            return any(path == item or path.endswith(f"/{item}") for item in candidates)
+            return path in candidates
         if requested in candidates:
             return True
         return "/" not in requested and requested == note.get("title")

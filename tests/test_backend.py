@@ -113,7 +113,7 @@ class ConfigurationAndLockTests(unittest.IsolatedAsyncioTestCase):
             )
             first = Settings.load(valid)
             second = Settings.load(valid)
-            self.assertEqual(root / "state" / "mutation.lock", first.lock_path())
+            self.assertEqual((root / "state" / "mutation.lock").resolve(), first.lock_path())
             self.assertEqual(first.lock_path(), second.lock_path())
 
             invalid = root / "invalid.toml"

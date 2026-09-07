@@ -202,6 +202,14 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(BackendError):
             await self.service.search("anything")
 
+    async def test_memory_url_cannot_silently_change_project_prefix(self):
+        note = await self.service.create("Exact", "A value")
+        permalink = note["note"]["permalink"]
+        exact = await self.service.read("memory://" + permalink)
+        self.assertEqual("A value", exact["content"])
+        with self.assertRaisesRegex(KnowledgeError, "fuzzy"):
+            await self.service.read("memory://other-space/" + permalink)
+
 
 if __name__ == "__main__":
     unittest.main()
