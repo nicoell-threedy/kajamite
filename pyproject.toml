@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling==1.29.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kajamite"
+version = "0.1.0"
+description = "Shared knowledge and project continuity for AI assistants, built on Basic Memory"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Nico (nicoell)"}]
+dependencies = ["mcp==2.1.1"]
+
+[project.scripts]
+kajamite = "kajamite.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kajamite"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "skills", "docs", "README.md", "LICENSE", "pyproject.toml", "uv.lock", "requirements.lock", ".github"]
