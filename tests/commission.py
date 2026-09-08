@@ -97,7 +97,7 @@ async def run(config, wiki):
     scope.mkdir()
     (scope / "Target.md").write_text("---\ntitle: Target\ntype: note\n---\n" + "filler " * 200 + "quasar\n", encoding="utf-8")
     settings = Settings.load(config)
-    refreshed = await asyncio.to_thread(subprocess.run, [settings.command, "reindex", "--full", "--project", "acceptance"], env=os.environ | settings.env, capture_output=True, timeout=120)
+    refreshed = await asyncio.to_thread(subprocess.run, [settings.command, "reindex", "--full", "--search", "--project", "acceptance"], env=os.environ | settings.env, capture_output=True, timeout=120)
     if refreshed.returncode:
         raise RuntimeError("Synthetic search corpus reindex failed")
     first = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar"})
