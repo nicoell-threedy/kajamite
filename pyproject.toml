@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "kajamite"
 version = "0.2.0"
-description = "Shared knowledge and project continuity for AI assistants, built on Basic Memory"
+description = "Shared knowledge access through namespaces, built on Basic Memory"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

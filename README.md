@@ -1,6 +1,6 @@
 # Kajamite
 
-Shared knowledge and project continuity for AI assistants, built on Basic Memory.
+Shared knowledge access through namespaces, built on Basic Memory.
 
 Kajamite gives assistants explicit namespace access to an existing Markdown
 knowledge base. A namespace is an ordinary directory: no registration, mandatory
@@ -82,6 +82,10 @@ Creation takes `namespace`, not a local filesystem directory. Search requires
 `namespaces`; `recursive=true` includes descendants. `namespaces=["/"]` with
 `recursive=true` selects the entire configured base. A context request takes
 one namespace or a list of exact identifiers, without implicitly following links.
+Use canonical returned paths, including their case. Bare note titles are not
+addresses. Metadata edits merge top-level keys; supplied values replace those
+keys. The backend does not support deleting keys or changing reserved
+title/type/permalink fields through metadata edits.
 
 `kajamite call TOOL --arguments /path/to/arguments.json` invokes the same operations
 from a JSON argument file. Use `--config` before `call`. The CLI returns JSON and

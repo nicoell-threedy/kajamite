@@ -26,10 +26,11 @@ context spanning scoped and shared notes. Source cases also test continuation
 past more than 250 outside-scope hits, nested/similar/overlapping namespaces,
 legacy metadata preservation and incomplete context/error disclosure.
 
-Observed 2026-09-08: all 15 source/protocol tests pass on Windows, along with
-nine real-backend checks for namespace listing, metadata, moves, physical-path
-search and structured context. A new native FTS stress case scans past 250
-outside-scope results; its cross-platform results are recorded after CI.
+Observed 2026-09-08: all 15 source/protocol tests pass on Windows and native
+Linux, along with ten real-backend checks for namespace listing, metadata,
+moves, physical-path search and structured context. The native FTS stress case
+passes on both hosts: an empty first scoped page scans 250 outside hits and the
+next cursor reaches the relevant note. Move collisions preserve both notes.
 
 A fresh agent using only the new tools recovered four facts from three notes
 and completed the requested action. Independent Markdown readback verified
@@ -37,7 +38,8 @@ preserved metadata and a byte-identical shared preference note. This is one
 continuity acceptance scenario, not a general claim about all models.
 
 CI exercises Windows and Ubuntu with Python 3.11, 3.12 and 3.14; 3.12 jobs also
-run native-backend acceptance. Release CI and Linux rollout remain in progress.
+run native-backend acceptance. Release CI evidence is linked by the repository's
+commit checks; consumer-specific rollout details remain with each consumer.
 
 ## Previous release evidence
 
