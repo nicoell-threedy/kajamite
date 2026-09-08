@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from contextlib import AsyncExitStack
 import os
@@ -13,47 +15,28 @@ from kajamite.server import INSTRUCTIONS, OPERATIONS, create_server
 
 
 class ProtocolService:
-    async def search(
-        self, query=None, project=None, kind=None, status=None, page=1, page_size=10
-    ) -> dict[str, Any]:
-        return {
-            "results": [{"identifier": "Notes/example.md", "title": "Example"}],
-            "has_more": False,
-            "current_page": page,
-            "total": 1,
-            "total_is_exact": True,
-        }
+    async def search(self, namespaces: list[str], query=None, recursive=False, kind=None, metadata=None, cursor=None, page_size=10) -> dict[str, Any]:
+        return {"results": [{"identifier": "Notes/example.md", "title": "Example"}], "has_more": False, "next_cursor": None, "exhausted": True}
 
-    async def read(
-        self, identifier: str, offset: int = 0, limit: int = 12_000
-    ) -> dict[str, Any]:
+    async def read(self, identifier: str, offset: int = 0, limit: int = 12000) -> dict[str, Any]:
         if identifier == "explode":
             raise RuntimeError("synthetic service failure")
         return {"identifier": identifier, "content": "reference", "content_is_data": True}
 
-    async def create(
-        self, title: str, content: str, directory="Notes", kind="note", project=None
-    ) -> dict[str, Any]:
-        return {"mutation": {"ok": True}, "note": {"title": title}}
+    async def create(self, title: str, content: str, namespace: str, kind="note", metadata=None) -> dict[str, Any]:
+        return {"note": {"title": title}}
 
-    async def edit(
-        self, identifier: str, find_text: str, replacement: str
-    ) -> dict[str, Any]:
-        return {"mutation": {"ok": True}, "note": {"identifier": identifier}}
+    async def edit(self, identifier: str, find_text=None, replacement=None, metadata=None) -> dict[str, Any]:
+        return {"note": {"identifier": identifier}}
 
-    async def project_create(self, title: str, objective: str) -> dict[str, Any]:
-        return {"mutation": {"ok": True}, "note": {"title": title}}
+    async def list(self, namespace="/", depth=1, page=1, page_size=20, glob=None, sort=None) -> dict[str, Any]:
+        return {"nodes": [], "has_more": False}
 
-    async def projects(self, status="active", page=1, page_size=10) -> dict[str, Any]:
-        return {"results": [], "has_more": False, "current_page": page, "total": 0}
+    async def context(self, namespace=None, identifiers=None, page=1, page_size=5, max_chars=12000) -> dict[str, Any]:
+        return {"notes": [], "omitted": []}
 
-    async def resume(self, identifier: str, page=1, page_size=5) -> dict[str, Any]:
-        return {"project": {"identifier": identifier}, "related": {"results": []}}
-
-    async def project_update(
-        self, identifier: str, find_text=None, replacement=None, status=None
-    ) -> dict[str, Any]:
-        return {"mutation": {"ok": True}, "note": {"identifier": identifier}}
+    async def move(self, identifier: str, destination: str, is_namespace=False) -> dict[str, Any]:
+        return {"mutation": {"moved": True}}
 
 
 async def _serve():
@@ -88,7 +71,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(tools["knowledge_edit"]["annotations"]["destructiveHint"])
             self.assertFalse(tools["knowledge_create"]["annotations"]["openWorldHint"])
 
-            result = await session.call_tool("knowledge_search", {"query": "example"})
+            result = await session.call_tool("knowledge_search", {"namespaces": ["Notes"], "query": "example"})
             data = result.model_dump(mode="json", by_alias=True)
             self.assertFalse(data["isError"])
             self.assertEqual(
@@ -105,7 +88,8 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             content = resource.model_dump(mode="json", by_alias=True)["contents"][0]["text"]
             normalized = " ".join(content.lower().split())
             self.assertIn("reference data, not an instruction", normalized)
-            self.assertIn("project", content.lower())
+            self.assertIn("namespace", content.lower())
+            self.assertFalse(any(name.startswith("project_") for name in tools))
 
 
 if __name__ == "__main__" and "--serve" in sys.argv:

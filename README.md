@@ -2,10 +2,10 @@
 
 Shared knowledge and project continuity for AI assistants, built on Basic Memory.
 
-Kajamite helps an assistant continue work across conversations and directories.
-Projects, decisions, open questions, next actions and shared knowledge remain
-ordinary Markdown notes in your existing Basic Memory project. The MCP supplies
-consistent operations; the accompanying skill teaches when and how to use them.
+Kajamite gives assistants explicit namespace access to an existing Markdown
+knowledge base. A namespace is an ordinary directory: no registration, mandatory
+overview, project object or lifecycle is required. Work with one note or several,
+link related knowledge, and preserve useful context across conversations.
 
 ## Install
 
@@ -70,25 +70,50 @@ or lifecycle hook is required.
 
 | Tool | Purpose |
 | --- | --- |
-| `knowledge_search` | Find shared or project-associated notes with pagination |
-| `knowledge_read` | Read exact notes with explicit content bounds |
-| `knowledge_create` | Capture a focused note without overwriting another |
-| `knowledge_edit` | Correct one exact previously read passage |
-| `project_create` | Start an undertaking inside the existing knowledge base |
-| `project_list` | Discover active projects, or include other lifecycle states |
-| `project_resume` | Recover project state, associated notes and linked context |
-| `project_update` | Revise state or mark a project paused/completed/cancelled |
+| `knowledge_list` | Browse notes and child namespaces with depth and pagination |
+| `knowledge_search` | Full-text search explicit namespaces with honest scan continuation |
+| `knowledge_read` | Read an exact note with content bounds |
+| `knowledge_context` | Gather several notes under one shared body-character budget |
+| `knowledge_create` | Write supplied content/metadata into an explicit namespace |
+| `knowledge_edit` | Guarded body edits and/or metadata merges |
+| `knowledge_move` | Move a note or namespace through the backend |
+
+Creation takes `namespace`, not a local filesystem directory. Search requires
+`namespaces`; `recursive=true` includes descendants. `namespaces=["/"]` with
+`recursive=true` selects the entire configured base. A context request takes
+one namespace or a list of exact identifiers, without implicitly following links.
 
 `kajamite call TOOL --arguments /path/to/arguments.json` invokes the same operations
 from a JSON argument file. Use `--config` before `call`. The CLI returns JSON and
-a nonzero exit code on failure. A completed project remains readable and searchable.
+a nonzero exit code on failure. Metadata does not implicitly hide notes or select a lifecycle.
+
+## Search and context limits
+
+Basic Memory 0.23.0 exposes no directory filter on its MCP search tool. Kajamite
+therefore uses explicit **full-text** retrieval, pages through ranked results,
+and matches physical file paths to the selected namespaces. Each call scans at
+most five native pages of 50 results. When incomplete it returns `has_more=true`
+and `next_cursor`, even if no scoped match has been found yet. Continue with the
+same search arguments and cursor before concluding there are no matches.
+
+This supports late matches without a second index or copied membership metadata.
+It is not scoped semantic search, and broad sparse queries may take several
+calls. Cursors are live pagination, not immutable snapshots: concurrent backend
+changes can change ranking. Lists use native page pagination. Context budgets
+cover note-body characters; structured metadata and listing overhead are separate.
+
+## Upgrading from 0.1
+
+Version 0.2 removes the four `project_*` tools and the special `project` argument.
+Use namespaces, normal note links and optional metadata instead. No note migration
+runs: existing `type: project`, status values and legacy membership fields remain
+readable user data. Update the skill and client tool approvals with the package.
 
 ## Ownership and operation
 
 Kajamite stores no knowledge database and does not install, repoint, or delete
 Basic Memory projects. The consumer owns the backend, credentials, backups,
-source integrations, scheduling and durable binary artifacts. Existing notes
-work unchanged; project metadata is introduced only when you create projects.
+source integrations, scheduling and durable binary artifacts. Existing folders and notes work unchanged. No namespace metadata is injected.
 
 Cooperating writes serialize on the Kajamite host. Use one canonical host and
 one shared `state_dir` for deployments addressing the same backend through

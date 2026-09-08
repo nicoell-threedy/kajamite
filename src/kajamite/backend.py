@@ -103,7 +103,7 @@ class Backend:
         except BackendError:
             raise
         except Exception as error:
-            mutation = name in {"write_note", "edit_note"}
+            mutation = name in {"write_note", "edit_note", "move_note"}
             detail = " A change may have committed; read the note before retrying." if mutation else " No result is available."
             raise BackendError("Basic Memory transport failed." + detail) from error
         finally:
@@ -132,7 +132,9 @@ class Backend:
                 break
         required = {"search_notes": {"metadata_filters", "output_format"},
                     "read_note": {"output_format"}, "write_note": {"metadata", "overwrite"},
-                    "edit_note": {"metadata", "expected_replacements"}, "build_context": {"timeframe"}}
+                    "edit_note": {"metadata", "expected_replacements"},
+                    "list_directory": {"dir_name", "page", "page_size", "output_format"},
+                    "move_note": {"destination_path", "is_directory", "output_format"}}
         for name, fields in required.items():
             if not fields <= set(catalog.get(name, {}).get("properties", {})):
                 raise BackendError(f"Basic Memory tool {name} is missing required parameters.")
