@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -103,6 +104,18 @@ async def run(config, wiki):
     return {"status": "passed", "checks": ["multi-note namespaces", "same-title separation", "metadata-only edits", "concurrent writers", "collision refusal", "note and namespace moves", "search by moved path", "bounded shared context", "plain Markdown", "native FTS continuation beyond 250 outside hits"]}
 
 
+def cleanup(temporary):
+    # Windows job termination may return before a child's log handle closes.
+    for attempt in range(20):
+        try:
+            temporary.cleanup()
+            return
+        except PermissionError:
+            if os.name != "nt" or attempt == 19:
+                raise
+            time.sleep(0.25)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--basic-memory", required=True)
@@ -114,9 +127,13 @@ def main():
         result = asyncio.run(run(config, wiki))
         print(json.dumps(result | {"config": str(config), "root": str(root)}))
     else:
-        with tempfile.TemporaryDirectory(prefix="kajamite-acceptance-") as directory:
-            config, wiki = prepare(Path(directory), args.basic_memory)
-            print(json.dumps(asyncio.run(run(config, wiki))))
+        temporary = tempfile.TemporaryDirectory(prefix="kajamite-acceptance-")
+        try:
+            config, wiki = prepare(Path(temporary.name), args.basic_memory)
+            result = asyncio.run(run(config, wiki))
+        finally:
+            cleanup(temporary)
+        print(json.dumps(result))
 
 
 if __name__ == "__main__":
