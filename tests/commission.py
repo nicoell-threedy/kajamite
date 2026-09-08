@@ -15,7 +15,7 @@ import tempfile
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from kajamite.backend import unpack
+from kajamite.backend import connect, unpack
 from kajamite.config import Settings
 
 
@@ -89,17 +89,12 @@ async def run(config, wiki):
     assert "step-free" in (wiki / shared["note"]["file_path"]).read_text(encoding="utf-8")
     assert len(list(wiki.rglob("*.md"))) == 4
     # Prove the fallback against the real FTS index, beyond a global top-k page.
-    outside = wiki / "Outside"
-    outside.mkdir()
-    for index in range(260):
-        (outside / f"noise-{index:03}.md").write_text(f"---\ntitle: quasar noise {index}\ntype: note\n---\nquasar\n", encoding="utf-8")
-    scope = wiki / "Late"
-    scope.mkdir()
-    (scope / "Target.md").write_text("---\ntitle: Target\ntype: note\n---\n" + "filler " * 200 + "quasar\n", encoding="utf-8")
     settings = Settings.load(config)
-    refreshed = await asyncio.to_thread(subprocess.run, [settings.command, "reindex", "--full", "--search", "--project", "acceptance"], env=os.environ | settings.env, capture_output=True, timeout=120)
-    if refreshed.returncode:
-        raise RuntimeError("Synthetic search corpus reindex failed")
+    # Use native incremental writes, not an unrelated standalone reindex process.
+    async with connect(settings) as backend:
+        for index in range(260):
+            await backend.call("write_note", {"title": f"quasar noise {index:03}", "directory": "Outside", "content": "quasar", "overwrite": False})
+        await backend.call("write_note", {"title": "Target", "directory": "Late", "content": "filler " * 200 + "quasar", "overwrite": False})
     first = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar"})
     assert not first["results"] and first["has_more"] and first["scan_limited"]
     later = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar", "cursor": first["next_cursor"]})
