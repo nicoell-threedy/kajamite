@@ -1,6 +1,6 @@
 # Validation
 
-## Version 0.3.1
+## Version 0.3.2
 
 Run source and protocol checks with:
 
@@ -27,9 +27,9 @@ metadata, the packaged `text/html;profile=mcp-app` resource, and its explicit
 no-network CSP. The wheel build is inspected to ensure the HTML, receipt module,
 skill, and UI loader are included.
 
-Observed 2026-09-09 on Linux: all 18 source/protocol tests pass with MCP SDK
+Observed 2026-09-09 on Linux: all 20 source/protocol tests pass with MCP SDK
 2.1.1, both packaged skill copies are identical, Python compilation succeeds,
-and the 0.3.1 wheel contains all UI and receipt assets. The initial v0.3.0 CI
+and the 0.3.2 wheel contains all UI and receipt assets. The initial v0.3.0 CI
 acceptance assertion assumed the stored body started with caller-supplied text;
 Basic Memory legitimately adds normalized Markdown before that text. Version
 0.3.1 checks that the verified stored preview contains the value instead.
@@ -38,6 +38,12 @@ GitHub Actions run 34398398576 passed all six Ubuntu/Windows Python
 0.23.0 commissioning suite, including the new receipt behavior, on both
 platforms. This host still cannot run that native suite because its separately
 managed Basic Memory executable is unavailable.
+
+The first v0.3.1 release-commit run then exposed a distinct intermittent Windows
+acceptance failure: the final synthetic note was not yet visible in Basic
+Memory's asynchronous FTS projection. Version 0.3.2 waits for that exact target
+with a ten-second bound before testing continuation beyond 250 outside results;
+it does not weaken the pagination assertion.
 
 ## Version 0.2
 

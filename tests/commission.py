@@ -29,6 +29,24 @@ async def call(config, name, arguments):
                 return unpack(await session.call_tool(name, arguments))
 
 
+async def wait_for_indexed_path(backend, query, identifier, attempts=40):
+    """Wait briefly for Basic Memory's asynchronous FTS projection to catch up."""
+    arguments = {
+        "query": query,
+        "search_type": "text",
+        "entity_types": ["entity"],
+        "page": 1,
+        "page_size": 10,
+    }
+    for attempt in range(attempts):
+        result = await backend.call("search_notes", arguments)
+        if any(row.get("file_path") == identifier for row in result.get("results", [])):
+            return
+        if attempt + 1 < attempts:
+            await asyncio.sleep(0.25)
+    raise AssertionError(f"native search index did not expose {identifier!r} after {attempts} attempts")
+
+
 def prepare(root, command):
     env = os.environ | {
         "BASIC_MEMORY_CONFIG_DIR": str(root / "backend-config"),
@@ -116,7 +134,8 @@ async def run(config, wiki):
     async with connect(settings) as backend:
         for index in range(260):
             await backend.call("write_note", {"title": f"quasar noise {index:03}", "directory": "Outside", "content": "quasar", "overwrite": False})
-        await backend.call("write_note", {"title": "Target", "directory": "Late", "content": "filler " * 200 + "quasar", "overwrite": False})
+        await backend.call("write_note", {"title": "Target", "directory": "Late", "content": "filler " * 200 + "quasar quasartargetready", "overwrite": False})
+        await wait_for_indexed_path(backend, "quasartargetready", "Late/Target.md")
     first = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar"})
     assert not first["results"] and first["has_more"] and first["scan_limited"]
     later = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar", "cursor": first["next_cursor"]})
