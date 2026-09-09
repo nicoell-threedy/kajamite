@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
@@ -39,7 +40,7 @@ class FakeBackend:
             self.notes[path] = self._note(path, arguments["title"], arguments["content"], frontmatter)
             return {"moved": True, "file_path": path, "permalink": path.removesuffix(".md")}
         if name == "read_note":
-            return dict(self.fuzzy or self._lookup(arguments["identifier"]))
+            return copy.deepcopy(self.fuzzy or self._lookup(arguments["identifier"]))
         if name == "edit_note":
             note = self._lookup(arguments["identifier"])
             if arguments["operation"] == "find_replace":
@@ -138,6 +139,13 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("beta/record.md", second["note"]["identifier"])
         self.assertEqual("literal body", first["note"]["content"])
         self.assertEqual("odd", first["note"]["metadata"]["status"])
+        change = first["knowledge_change"]
+        self.assertEqual("create", change["operation"])
+        self.assertIsNone(change["before"])
+        self.assertEqual("alpha/record.md", change["after"]["identifier"])
+        self.assertEqual("literal body", change["body_change"]["after"]["preview"])
+        self.assertTrue(change["readback_verified"])
+        self.assertIn("This receipt covers this Kajamite operation only", first["knowledge_change_text"])
         self.assertNotIn("status", second["note"]["metadata"])
         self.assertEqual("project", (await self.service.read("beta/record.md"))["metadata"]["type"])
         with self.assertRaisesRegex(ValueError, "reserved"):
@@ -152,8 +160,19 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("new", changed["note"]["content"])
         self.assertEqual(1, changed["note"]["metadata"]["keep"])
         self.assertEqual("custom", changed["note"]["metadata"]["status"])
+        change = changed["knowledge_change"]
+        self.assertEqual("exact_replacement", change["body_change"]["kind"])
+        self.assertEqual("old once", change["body_change"]["before"]["preview"])
+        self.assertEqual("new", change["body_change"]["after"]["preview"])
+        self.assertEqual("status", change["metadata_changes"][0]["key"])
+        self.assertIsNone(change["metadata_changes"][0]["before"])
+        self.assertEqual("custom", change["metadata_changes"][0]["after"])
+        self.assertFalse(change["metadata_changes"][0]["before_present"])
+        self.assertTrue(change["metadata_changes"][0]["after_present"])
+        self.assertNotEqual(change["before"]["content_sha256"], change["after"]["content_sha256"])
         metadata_only = await self.service.edit(identifier, metadata={"rating": 5})
         self.assertEqual("new", metadata_only["note"]["content"])
+        self.assertIsNone(metadata_only["knowledge_change"]["body_change"])
         with self.assertRaisesRegex(ValueError, "reserved"):
             await self.service.edit(identifier, metadata={"type": "changed"})
         self.backend.notes[identifier]["content"] = "same same"
@@ -234,9 +253,20 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         moved = await self.service.move(created["note"]["identifier"], "archive/move-me.md")
         self.assertEqual("archive/move-me.md", moved["note"]["identifier"])
         self.assertTrue(moved["note"]["metadata"]["keep"])
+        change = moved["knowledge_change"]
+        self.assertEqual("move_note", change["operation"])
+        self.assertEqual("inbox/move-me.md", change["before"]["identifier"])
+        self.assertEqual("archive/move-me.md", change["after"]["identifier"])
+        self.assertEqual(change["before"]["content_sha256"], change["after"]["content_sha256"])
         await self.service.create("Nested", "body", "source")
         directory = await self.service.move("/source", "archive/source", is_namespace=True)
         self.assertEqual("/archive/source", directory["namespace"])
+        namespace_change = directory["knowledge_change"]
+        self.assertEqual("move_namespace", namespace_change["operation"])
+        self.assertEqual(1, namespace_change["affected_notes"])
+        self.assertTrue(namespace_change["affected_notes_exact"])
+        self.assertFalse(namespace_change["readback_verified"])
+        self.assertEqual("backend_confirmed", namespace_change["verification"])
         await self.service.create("Again", "body", "source-two")
         self.backend.directory_destination = "wrong/place"
         with self.assertRaisesRegex(KnowledgeError, "requested path"):
@@ -250,6 +280,16 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
                 await self.service.move("archive/move-me.md", invalid)
         with self.assertRaisesRegex(ValueError, "root namespace"):
             await self.service.move("/", "elsewhere", is_namespace=True)
+
+    async def test_receipt_value_previews_are_bounded_and_hashed(self):
+        content = "x" * 2_100
+        created = await self.service.create("Long receipt", content, "notes")
+        value = created["knowledge_change"]["body_change"]["after"]
+        self.assertEqual(2_000, len(value["preview"]))
+        self.assertEqual(2_100, value["characters"])
+        self.assertTrue(value["truncated"])
+        self.assertEqual(64, len(value["sha256"]))
+        self.assertIn("preview; truncated", created["knowledge_change_text"])
 
 
 if __name__ == "__main__":

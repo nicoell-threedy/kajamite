@@ -87,6 +87,22 @@ addresses. Metadata edits merge top-level keys; supplied values replace those
 keys. The backend does not support deleting keys or changing reserved
 title/type/permalink fields through metadata edits.
 
+## Mutation receipts and optional UI
+
+Each successful create, edit, or move returns a deterministic
+`knowledge_change` receipt plus a labeled `knowledge_change_text` rendering.
+Receipts identify the operation and affected path, show bounded readable changed
+values and metadata, include full-value hashes, state whether readback verified
+the result, and label their coverage as the current Kajamite operation only.
+They are evidence from the tool result, independent of the assistant's summary.
+
+Compatible MCP Apps hosts can render the same receipt in a compact read-only
+card. The packaged card makes no network requests and offers no mutation actions.
+Clients without custom UI—including mobile surfaces where it is unavailable—use
+the structured and labeled text result. Kajamite does not store a receipt history;
+Git remains the durable backstop for all repository changes, including writes
+made outside Kajamite.
+
 `kajamite call TOOL --arguments /path/to/arguments.json` invokes the same operations
 from a JSON argument file. Use `--config` before `call`. The CLI returns JSON and
 a nonzero exit code on failure. Metadata does not implicitly hide notes or select a lifecycle.
@@ -106,12 +122,14 @@ calls. Cursors are live pagination, not immutable snapshots: concurrent backend
 changes can change ranking. Lists use native page pagination. Context budgets
 cover note-body characters; structured metadata and listing overhead are separate.
 
-## Upgrading from 0.1
+## Upgrading
 
 Version 0.2 removes the four `project_*` tools and the special `project` argument.
 Use namespaces, normal note links and optional metadata instead. No note migration
 runs: existing `type: project`, status values and legacy membership fields remain
 readable user data. Update the skill and client tool approvals with the package.
+Version 0.3 keeps those tool contracts and adds mutation receipt fields plus an
+optional MCP Apps presentation; it performs no data migration.
 
 ## Ownership and operation
 

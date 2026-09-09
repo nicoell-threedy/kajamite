@@ -48,8 +48,19 @@ def prepare(root, command):
 
 
 async def run(config, wiki):
+    def receipt(result, operation, readback_verified=True):
+        change = result["knowledge_change"]
+        assert change["operation"] == operation
+        assert change["coverage"] == "kajamite_operation"
+        assert change["readback_verified"] is readback_verified
+        assert "This receipt covers this Kajamite operation only" in result["knowledge_change_text"]
+        return change
+
     shared = await call(config, "knowledge_create", {"title": "Access", "namespace": "Personal", "kind": "preference", "content": "Prefer step-free routes."})
+    receipt(shared, "create")
     created = await call(config, "knowledge_create", {"title": "Plan", "namespace": "Visits/Observatory", "content": "Day: Saturday. Budget: 80 units.\n- [ ] Reserve admission.", "metadata": {"status": "tentative", "custom": {"keep": True}}})
+    created_change = receipt(created, "create")
+    assert created_change["body_change"]["after"]["preview"].startswith("Day: Saturday")
     identifier = created["note"]["identifier"]
     await call(config, "knowledge_create", {"title": "Transport", "namespace": "Visits/Observatory", "content": "Take the evening shuttle."})
     await call(config, "knowledge_create", {"title": "Plan", "namespace": "Visits/Observatory-old", "content": "Day: Friday."})
@@ -58,24 +69,34 @@ async def run(config, wiki):
     context = await call(config, "knowledge_context", {"namespace": "Visits/Observatory"})
     assert len(context["notes"]) == 2
     assert all(note["file_path"].startswith("Visits/Observatory/") for note in context["notes"])
-    await call(config, "knowledge_edit", {"identifier": identifier, "metadata": {"status": "booked"}})
-    await asyncio.gather(
+    metadata_edit = await call(config, "knowledge_edit", {"identifier": identifier, "metadata": {"status": "booked"}})
+    metadata_change = receipt(metadata_edit, "edit")["metadata_changes"][0]
+    assert metadata_change["key"] == "status"
+    assert metadata_change["before"] == "tentative"
+    assert metadata_change["after"] == "booked"
+    assert metadata_change["before_present"] and metadata_change["after_present"]
+    body_edits = await asyncio.gather(
         call(config, "knowledge_edit", {"identifier": identifier, "find_text": "Saturday", "replacement": "Sunday"}),
         call(config, "knowledge_edit", {"identifier": identifier, "find_text": "80 units", "replacement": "90 units"}),
     )
+    assert {receipt(item, "edit")["body_change"]["after"]["preview"] for item in body_edits} == {"Sunday", "90 units"}
     corrected = await call(config, "knowledge_read", {"identifier": identifier})
     assert "Sunday" in corrected["content"] and "90 units" in corrected["content"]
     assert corrected["metadata"]["custom"] == {"keep": True}
     assert corrected["metadata"]["status"] == "booked"
     assert "kajamite_project" not in corrected["metadata"]
-    await call(config, "knowledge_move", {"identifier": "Visits/Observatory/Transport.md", "destination": "Visits/Observatory/Logistics.md"})
+    note_move = await call(config, "knowledge_move", {"identifier": "Visits/Observatory/Transport.md", "destination": "Visits/Observatory/Logistics.md"})
+    note_change = receipt(note_move, "move_note")
+    assert note_change["before"]["content_sha256"] == note_change["after"]["content_sha256"]
     try:
         await call(config, "knowledge_move", {"identifier": "Visits/Observatory/Logistics.md", "destination": identifier})
     except Exception:
         pass
     else:
         raise AssertionError("move overwrote an existing note")
-    await call(config, "knowledge_move", {"identifier": "Visits/Observatory", "destination": "Archive/Observatory", "is_namespace": True})
+    namespace_move = await call(config, "knowledge_move", {"identifier": "Visits/Observatory", "destination": "Archive/Observatory", "is_namespace": True})
+    namespace_change = receipt(namespace_move, "move_namespace", readback_verified=False)
+    assert namespace_change["affected_notes"] == 2 and namespace_change["affected_notes_exact"]
     assert not (wiki / "Visits/Observatory/Plan.md").exists()
     assert (wiki / "Archive/Observatory/Plan.md").exists()
     assert "evening shuttle" in (wiki / "Archive/Observatory/Logistics.md").read_text(encoding="utf-8")
@@ -101,7 +122,7 @@ async def run(config, wiki):
     later = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar", "cursor": first["next_cursor"]})
     assert [row["identifier"] for row in later["results"]] == ["Late/Target.md"]
     assert later["exhausted"]
-    return {"status": "passed", "checks": ["multi-note namespaces", "same-title separation", "metadata-only edits", "concurrent writers", "collision refusal", "note and namespace moves", "search by moved path", "bounded shared context", "plain Markdown", "native FTS continuation beyond 250 outside hits"]}
+    return {"status": "passed", "checks": ["multi-note namespaces", "same-title separation", "deterministic mutation receipts", "plain-text receipt fallback", "metadata-only edits", "concurrent writers", "collision refusal", "note and namespace moves", "search by moved path", "bounded shared context", "plain Markdown", "native FTS continuation beyond 250 outside hits"]}
 
 
 def cleanup(temporary):

@@ -1,6 +1,6 @@
 # Validation
 
-## Version 0.2
+## Version 0.3
 
 Run source and protocol checks with:
 
@@ -18,6 +18,24 @@ python tests/commission.py --basic-memory /absolute/path/to/basic-memory
 On Windows supply basic-memory.exe. The harness owns only its temporary synthetic
 project/configuration. --keep retains that synthetic state for a fresh-agent test.
 No personal knowledge corpus is shipped.
+
+Acceptance additionally checks deterministic create/edit/move receipts, labeled
+text fallback, exact replacement and metadata values, content-hash preservation,
+truthful namespace-move confirmation, and affected-note counts. Source and wire
+cases check 2,000-character preview bounds, full-value hashes, mutation tool UI
+metadata, the packaged `text/html;profile=mcp-app` resource, and its explicit
+no-network CSP. The wheel build is inspected to ensure the HTML, receipt module,
+skill, and UI loader are included.
+
+Observed 2026-09-09 on Linux: all 18 source/protocol tests pass with MCP SDK
+2.1.1, both packaged skill copies are identical, Python compilation succeeds,
+and the 0.3.0 wheel contains all UI and receipt assets. The isolated native
+Basic Memory commissioning suite was extended for receipt behavior but could
+not run on this host because the Basic Memory executable is unavailable. The
+release CI jobs and a capable host must supply that evidence before claiming
+native-backend acceptance for 0.3.
+
+## Version 0.2
 
 Acceptance covers multi-note namespaces, same titles in different folders,
 metadata-only updates, cooperating concurrent edits, move collision refusal,

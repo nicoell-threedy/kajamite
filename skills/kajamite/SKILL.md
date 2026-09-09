@@ -61,6 +61,17 @@ committed: inspect its intended identifier/location before retrying. Cooperating
 Kajamite writers serialize, but direct backend tools and human editors can race.
 Reconcile unexpected changes rather than overwriting them.
 
+After every successful knowledge_create, knowledge_edit or knowledge_move,
+inspect the returned knowledge_change receipt before describing the result. It
+is deterministic evidence from the service, not a model summary. Use its
+before/current identifiers, body value previews, metadata changes, verification
+state and affected-note count. If a custom card renders, it is only a view of the
+same object; on clients without UI, use knowledge_change_text and the structured
+fields. Clearly preserve the `kajamite_operation` coverage boundary: the receipt
+does not prove that no human, filesystem process or direct backend tool changed
+other knowledge. A truncated value includes its complete length and hash; read
+the note when the full current content is needed.
+
 Retained artifacts can live in the consumer's durable file store, with purpose
 and references in notes. Source applications remain authoritative for their own
 bookings, messages and calendar entries. A simple next action can be a Markdown

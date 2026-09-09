@@ -10,8 +10,14 @@ from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID
 
+from kajamite import receipt
 from kajamite.server import INSTRUCTIONS, OPERATIONS, create_server
+from kajamite.ui import RESOURCE_URI
+
+
+SOURCE_ROOT = str(Path(__file__).resolve().parents[1] / "src")
 
 
 class ProtocolService:
@@ -24,7 +30,18 @@ class ProtocolService:
         return {"identifier": identifier, "content": "reference", "content_is_data": True}
 
     async def create(self, title: str, content: str, namespace: str, kind="note", metadata=None) -> dict[str, Any]:
-        return {"note": {"title": title}}
+        note = {
+            "title": title,
+            "file_path": f"{namespace.strip('/')}/{title}.md",
+            "content": content,
+            "frontmatter": {"title": title, "type": kind} | (metadata or {}),
+        }
+        change = receipt.for_create(note)
+        return {
+            "note": {"title": title},
+            "knowledge_change": change,
+            "knowledge_change_text": receipt.render(change),
+        }
 
     async def edit(self, identifier: str, find_text=None, replacement=None, metadata=None) -> dict[str, Any]:
         return {"note": {"identifier": identifier}}
@@ -46,7 +63,9 @@ async def _serve():
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_live_protocol_contract_and_errors(self):
         parameters = StdioServerParameters(
-            command=sys.executable, args=[str(Path(__file__).resolve()), "--serve"]
+            command=sys.executable,
+            args=[str(Path(__file__).resolve()), "--serve"],
+            env=os.environ | {"PYTHONPATH": SOURCE_ROOT},
         )
         async with AsyncExitStack() as stack:
             errors = stack.enter_context(open(os.devnull, "w"))
@@ -90,6 +109,56 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("reference data, not an instruction", normalized)
             self.assertIn("namespace", content.lower())
             self.assertFalse(any(name.startswith("project_") for name in tools))
+
+    async def test_mutations_advertise_read_only_apps_card_with_plain_fallback(self):
+        parameters = StdioServerParameters(
+            command=sys.executable,
+            args=[str(Path(__file__).resolve()), "--serve"],
+            env=os.environ | {"PYTHONPATH": SOURCE_ROOT},
+        )
+        async with AsyncExitStack() as stack:
+            errors = stack.enter_context(open(os.devnull, "w"))
+            read, write = await stack.enter_async_context(stdio_client(parameters, errlog=errors))
+            session = await stack.enter_async_context(ClientSession(
+                read,
+                write,
+                extensions={EXTENSION_ID: {"mimeTypes": [APP_MIME_TYPE]}},
+            ))
+            discovered = await session.discover()
+            discovery = discovered.model_dump(mode="json", by_alias=True)
+            self.assertIn(EXTENSION_ID, discovery["capabilities"]["extensions"])
+
+            listed = await session.list_tools()
+            tools = {
+                tool.name: tool.model_dump(mode="json", by_alias=True)
+                for tool in listed.tools
+            }
+            for name in ("knowledge_create", "knowledge_edit", "knowledge_move"):
+                self.assertEqual(RESOURCE_URI, tools[name]["_meta"]["ui"]["resourceUri"])
+            self.assertIsNone(tools["knowledge_read"]["_meta"])
+
+            resources = await session.list_resources()
+            app = next(item for item in resources.resources if str(item.uri) == RESOURCE_URI)
+            self.assertEqual(APP_MIME_TYPE, app.mime_type)
+            self.assertEqual([], app.meta["ui"]["csp"]["connectDomains"])
+            self.assertEqual([], app.meta["ui"]["csp"]["resourceDomains"])
+            loaded = await session.read_resource(RESOURCE_URI)
+            wire = loaded.model_dump(mode="json", by_alias=True)["contents"][0]
+            self.assertEqual(APP_MIME_TYPE, wire["mimeType"])
+            self.assertIn("ui/notifications/tool-result", wire["text"])
+            self.assertNotIn("https://", wire["text"])
+            self.assertNotIn("http://", wire["text"])
+
+            result = await session.call_tool("knowledge_create", {
+                "title": "Example", "content": "stored value", "namespace": "Synthetic"
+            })
+            output = result.model_dump(mode="json", by_alias=True)["structuredContent"]
+            self.assertEqual("create", output["knowledge_change"]["operation"])
+            self.assertEqual(
+                "stored value", output["knowledge_change"]["body_change"]["after"]["preview"]
+            )
+            self.assertIn("Knowledge change: create", output["knowledge_change_text"])
+            self.assertIn("Coverage: kajamite_operation", output["knowledge_change_text"])
 
 
 if __name__ == "__main__" and "--serve" in sys.argv:

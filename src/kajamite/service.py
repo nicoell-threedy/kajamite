@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from .backend import BackendError
+from . import receipt
 
 
 class KnowledgeError(RuntimeError):
@@ -125,7 +126,11 @@ class KnowledgeService:
                  "note_type": kind, "metadata": metadata, "overwrite": False},
             )
             note = await self._read_full(self._mutation_identifier(result))
-            return {"mutation": result, "note": self._public_note(note)}
+            change = receipt.for_create(note)
+            return {
+                "mutation": result, "note": self._public_note(note),
+                "knowledge_change": change, "knowledge_change_text": receipt.render(change),
+            }
 
     async def edit(
         self,
@@ -166,7 +171,14 @@ class KnowledgeService:
                 self._metadata(after).get(key) != value for key, value in (metadata or {}).items()
             ):
                 raise KnowledgeError("edit readback did not match the requested changes")
-            return {"mutation": result, "note": self._public_note(after)}
+            change = receipt.for_edit(
+                before, after, find_text=find_text, replacement=replacement,
+                metadata_keys=set(metadata or {}),
+            )
+            return {
+                "mutation": result, "note": self._public_note(after),
+                "knowledge_change": change, "knowledge_change_text": receipt.render(change),
+            }
 
     async def list(
         self,
@@ -274,7 +286,12 @@ class KnowledgeService:
                     raise KnowledgeError("Basic Memory did not confirm the namespace move")
                 if self._relative_path(str(result.get("destination", ""))) != destination:
                     raise KnowledgeError("the namespace did not move to the requested path")
-                return {"mutation": result, "namespace": "/" + destination.strip("/")}
+                namespace = "/" + destination.strip("/")
+                change = receipt.for_namespace_move(source, namespace, result)
+                return {
+                    "mutation": result, "namespace": namespace,
+                    "knowledge_change": change, "knowledge_change_text": receipt.render(change),
+                }
 
         async with self.backend.mutation():
             before = await self._read_full(identifier)
@@ -294,7 +311,11 @@ class KnowledgeService:
                 for key, value in self._metadata(before).items() if key != "permalink"
             ):
                 raise KnowledgeError("move readback did not preserve the note")
-            return {"mutation": result, "note": self._public_note(after)}
+            change = receipt.for_note_move(before, after)
+            return {
+                "mutation": result, "note": self._public_note(after),
+                "knowledge_change": change, "knowledge_change_text": receipt.render(change),
+            }
 
     async def _read_full(self, identifier: str) -> dict[str, Any]:
         payload = await self.backend.call(

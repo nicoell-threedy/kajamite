@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Knowledge change</title>
+  <style>
+    :root { color-scheme: light dark; font: 14px/1.4 system-ui, sans-serif; }
+    body { margin: 0; padding: 12px; background: Canvas; color: CanvasText; }
+    article { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+      border-radius: 12px; padding: 14px; }
+    header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    .badge { border-radius: 999px; padding: 2px 8px; background: color-mix(in srgb, #16803a 15%, Canvas); color: #16803a; font-weight: 650; }
+    dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+    dt { opacity: .65; } dd { margin: 0; overflow-wrap: anywhere; }
+    section, details { margin-top: 14px; }
+    h2, h3, summary { font-size: 13px; font-weight: 650; }
+    h3 { margin: 0 0 6px; opacity: .7; }
+    .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    pre { margin: 8px 0 0; padding: 10px; border-radius: 8px; background: color-mix(in srgb, CanvasText 6%, Canvas); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .comparison pre { margin: 0; min-height: 3em; }
+    ul { margin: 6px 0 0; padding-left: 20px; }
+    .notice { opacity: .72; font-size: 12px; }
+    [hidden] { display: none; }
+    @media (max-width: 520px) { .comparison { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <article>
+    <header><h1>Knowledge change</h1><span id="badge" class="badge">Waiting</span></header>
+    <dl id="summary"></dl>
+    <section id="body-section" hidden>
+      <h2>Changed body value</h2>
+      <div class="comparison">
+        <div><h3>Previous</h3><pre id="body-before"></pre></div>
+        <div><h3>Current</h3><pre id="body-after"></pre></div>
+      </div>
+    </section>
+    <section id="metadata-section" hidden><h2>Changed metadata</h2><ul id="metadata"></ul></section>
+    <details><summary>Technical evidence</summary><pre id="evidence"></pre></details>
+    <p id="notice" class="notice"></p>
+  </article>
+  <script>
+    (() => {
+      const byId = id => document.getElementById(id);
+      const addRow = (list, label, value) => {
+        const dt = document.createElement('dt'); dt.textContent = label;
+        const dd = document.createElement('dd'); dd.textContent = String(value);
+        list.append(dt, dd);
+      };
+      const readable = value => {
+        if (!value) return 'none';
+        return value.preview + (value.truncated ? `\n\nPreview of ${value.characters} characters` : '');
+      };
+      const metadataValue = (change, side) => {
+        if (change[`${side}_present`] === false) return '<absent>';
+        return JSON.stringify(change[side]);
+      };
+      const render = receipt => {
+        const summary = byId('summary'); summary.replaceChildren();
+        addRow(summary, 'Operation', receipt.operation);
+        addRow(summary, 'Before', receipt.before?.identifier ?? 'none');
+        addRow(summary, 'Current', receipt.after?.identifier ?? 'none');
+        addRow(summary, 'Coverage', receipt.coverage);
+        addRow(summary, 'Affected notes', receipt.affected_notes ?? 'not reported');
+        byId('badge').textContent = receipt.readback_verified ? 'Readback verified' : 'Backend confirmed';
+        const body = receipt.body_change;
+        byId('body-section').hidden = !body;
+        if (body) {
+          byId('body-before').textContent = readable(body.before);
+          byId('body-after').textContent = readable(body.after);
+        }
+        const metadata = receipt.metadata_changes ?? [];
+        byId('metadata-section').hidden = metadata.length === 0;
+        const metadataList = byId('metadata'); metadataList.replaceChildren();
+        for (const change of metadata) {
+          const item = document.createElement('li');
+          item.textContent = `${change.key}: ${metadataValue(change, 'before')} → ${metadataValue(change, 'after')}`;
+          metadataList.append(item);
+        }
+        byId('evidence').textContent = JSON.stringify({
+          schema_version: receipt.schema_version,
+          before: receipt.before,
+          after: receipt.after,
+          verification: receipt.verification,
+          affected_notes_exact: receipt.affected_notes_exact,
+          body_change: receipt.body_change,
+          metadata_changes: receipt.metadata_changes
+        }, null, 2);
+        byId('notice').textContent = receipt.coverage_notice;
+      };
+      window.addEventListener('message', event => {
+        if (event.source !== window.parent) return;
+        const message = event.data;
+        if (message?.id === 1 && message?.result) {
+          window.parent.postMessage({jsonrpc: '2.0', method: 'ui/notifications/initialized'}, '*');
+        }
+        if (message?.method === 'ui/notifications/tool-result') {
+          const receipt = message.params?.structuredContent?.knowledge_change;
+          if (receipt) render(receipt);
+        }
+      });
+      window.parent.postMessage({jsonrpc: '2.0', id: 1, method: 'ui/initialize', params: {
+        protocolVersion: '2026-01-26',
+        appInfo: {name: 'kajamite-knowledge-change', version: '1.0.0'},
+        appCapabilities: {availableDisplayModes: ['inline', 'fullscreen']}
+      }}, '*');
+    })();
+  </script>
+</body>
+</html>
