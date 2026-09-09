@@ -36,8 +36,9 @@ Basic Memory legitimately adds normalized Markdown before that text. Version
 GitHub Actions run 34398398576 passed all six Ubuntu/Windows Python
 3.11/3.12/3.14 jobs. Its Python 3.12 jobs passed the isolated Basic Memory
 0.23.0 commissioning suite, including the new receipt behavior, on both
-platforms. This host still cannot run that native suite because its separately
-managed Basic Memory executable is unavailable.
+platforms. The same isolated suite subsequently passed on a separate Linux host
+with an independently installed Basic Memory executable and temporary synthetic
+state. Its canonical knowledge project was unavailable during this check.
 
 The first v0.3.1 release-commit run then exposed a distinct intermittent Windows
 acceptance failure: the final synthetic note was not yet visible in Basic
