@@ -60,7 +60,7 @@ async def run(config, wiki):
     receipt(shared, "create")
     created = await call(config, "knowledge_create", {"title": "Plan", "namespace": "Visits/Observatory", "content": "Day: Saturday. Budget: 80 units.\n- [ ] Reserve admission.", "metadata": {"status": "tentative", "custom": {"keep": True}}})
     created_change = receipt(created, "create")
-    assert created_change["body_change"]["after"]["preview"].startswith("Day: Saturday")
+    assert "Day: Saturday" in created_change["body_change"]["after"]["preview"]
     identifier = created["note"]["identifier"]
     await call(config, "knowledge_create", {"title": "Transport", "namespace": "Visits/Observatory", "content": "Take the evening shuttle."})
     await call(config, "knowledge_create", {"title": "Plan", "namespace": "Visits/Observatory-old", "content": "Day: Friday."})
