@@ -29,7 +29,7 @@ async def call(config, name, arguments):
                 return unpack(await session.call_tool(name, arguments))
 
 
-async def wait_for_indexed_path(backend, query, identifier, attempts=40):
+async def wait_for_indexed_path(backend, query, identifier, attempts=120):
     """Wait briefly for Basic Memory's asynchronous FTS projection to catch up."""
     arguments = {
         "query": query,

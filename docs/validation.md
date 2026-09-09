@@ -42,7 +42,7 @@ managed Basic Memory executable is unavailable.
 The first v0.3.1 release-commit run then exposed a distinct intermittent Windows
 acceptance failure: the final synthetic note was not yet visible in Basic
 Memory's asynchronous FTS projection. Version 0.3.2 waits for that exact target
-with a ten-second bound before testing continuation beyond 250 outside results;
+with a 30-second bound before testing continuation beyond 250 outside results;
 it does not weaken the pagination assertion.
 
 ## Version 0.2
