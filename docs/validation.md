@@ -32,11 +32,12 @@ Observed 2026-09-09 on Linux: all 18 source/protocol tests pass with MCP SDK
 and the 0.3.1 wheel contains all UI and receipt assets. The initial v0.3.0 CI
 acceptance assertion assumed the stored body started with caller-supplied text;
 Basic Memory legitimately adds normalized Markdown before that text. Version
-0.3.1 checks that the verified stored preview contains the value instead. The isolated native
-Basic Memory commissioning suite was extended for receipt behavior but could
-not run on this host because the Basic Memory executable is unavailable. The
-release CI jobs and a capable host must supply that evidence before claiming
-native-backend acceptance for 0.3.
+0.3.1 checks that the verified stored preview contains the value instead.
+GitHub Actions run 34398398576 passed all six Ubuntu/Windows Python
+3.11/3.12/3.14 jobs. Its Python 3.12 jobs passed the isolated Basic Memory
+0.23.0 commissioning suite, including the new receipt behavior, on both
+platforms. This host still cannot run that native suite because its separately
+managed Basic Memory executable is unavailable.
 
 ## Version 0.2
 
