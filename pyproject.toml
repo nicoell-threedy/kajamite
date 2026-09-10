@@ -4,13 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kajamite"
-version = "0.3.2"
-description = "Shared knowledge access through namespaces, built on Basic Memory"
+version = "0.4.0"
+description = "Portable, evidence-aware knowledge engine with optional MCP"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Nico (nicoell)"}]
-dependencies = ["mcp==2.1.1"]
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["mcp==2.1.1"]
+basic-memory = ["mcp==2.1.1"]
 
 [project.scripts]
 kajamite = "kajamite.__main__:main"

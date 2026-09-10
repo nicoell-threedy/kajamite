@@ -1,13 +1,22 @@
 # Kajamite
 
-Shared knowledge access through namespaces, built on Basic Memory.
+Portable, evidence-aware knowledge infrastructure for agents.
 
-Kajamite gives assistants explicit namespace access to an existing Markdown
-knowledge base. A namespace is an ordinary directory: no registration, mandatory
-overview, project object or lifecycle is required. Work with one note or several,
-link related knowledge, and preserve useful context across conversations.
+Kajamite is a reusable knowledge engine for Python applications, command-line
+clients, and optional MCP servers. It preserves ordinary Markdown while adding
+evidence, scope, revision history, lifecycle maintenance, and inspectable reuse
+decisions for governed claims. Basic Memory supplies storage, search, and graph
+discovery through its public interface.
+
+A namespace is an ordinary directory. Work with one note or several, link related
+knowledge, and preserve useful context across applications and conversations.
 
 ## Install
+
+The Python knowledge engine has no runtime dependencies: install it with
+`pip install .` from this checkout. Install the `basic-memory` extra for that
+backend adapter, or the `mcp` extra for the MCP frontend. Both extras currently
+use the same MCP client/server SDK. The hashed requirements include this SDK.
 
 Use Python 3.11 or newer on Windows or Linux. Install and configure Basic Memory
 separately; this release is tested against 0.23.0. Select an existing project.
@@ -23,11 +32,11 @@ Use `.venv/bin/python` on Linux or `.venv/Scripts/python.exe` on Windows:
 
 ```sh
 python -m pip install --require-hashes -r requirements.lock
-python -m pip install --no-deps .
+python -m pip install --no-deps '.[mcp]'
 ```
 
 In those two commands, replace `python` with the virtual environment's interpreter.
-For development with uv, `uv sync --locked` uses the checked-in dependency lock.
+For development with uv, `uv sync --locked --extra mcp` uses the checked-in dependency lock.
 
 Create a private TOML configuration outside version control:
 
@@ -65,6 +74,22 @@ Install [skills/kajamite/SKILL.md](skills/kajamite/SKILL.md) using your client's
 project-local skill mechanism, or run `kajamite skill` to print it. The same guide
 is available as the `kajamite://guide` MCP resource. No particular client plugin
 or lifecycle hook is required.
+
+## Unified knowledge engine
+
+`kajamite.KnowledgeEngine` supplies the shared Python operation API.
+CLI and MCP operations call that engine.
+Install `kajamite` for an embedded engine with a consumer-supplied backend.
+Install `kajamite[basic-memory]` for its public Basic Memory client adapter.
+Install `kajamite[mcp]` to expose the engine through the MCP server.
+
+Plain notes, preferences, and proposals retain their meaning without invented verification.
+Governed claims add evidence, scope, revision history, and explicit lifecycle operations.
+The engine checks current records before reuse and explains withheld results.
+
+The [engine contract](docs/engine-contract.md) defines the ownership boundary.
+The [capability audit](docs/basic-memory-capability-audit.md) records observed backend features and limits.
+The [record guide](docs/governance.md) describes record construction and validation.
 
 ## Tools
 
@@ -130,6 +155,8 @@ runs: existing `type: project`, status values and legacy membership fields remai
 readable user data. Update the skill and client tool approvals with the package.
 Version 0.3 keeps those tool contracts and adds mutation receipt fields plus an
 optional MCP Apps presentation; it performs no data migration.
+Version 0.4 makes the unified engine the shared operation path. Install `kajamite[mcp]` for
+the existing note frontend, or `kajamite` for dependency-free embedding.
 
 ## Ownership and operation
 
@@ -176,3 +203,21 @@ CI uses a shallow checkout, so local pre-push checks provide the full-history ch
 These checks detect known private identifiers and selected credential, address,
 and machine-path patterns. They do not replace review for private context or
 comprehensive secret scanning. Commit author names and email addresses are allowed.
+
+## Evidence-aware operations
+
+`knowledge_record_create` persists a revision-one record in an explicit namespace.
+`knowledge_record_transition` requires an expected revision and a unique operation ID.
+It supports revision, dispute, revalidation, supersession, retraction, and source/dependency health changes.
+`knowledge_record_maintain` marks affected dependents for review.
+`knowledge_record_remove` removes one exact record and reports active-index evidence.
+
+Reads, search, listings, and context accept `mode="reuse"` or `mode="inspect"`.
+Governed reuse requires matching `request_scope` and an injected source checker.
+The default CLI has no source-specific checker, so it withholds governed claims from reuse.
+Inspection remains available. Consumers can construct the engine with their own policy callbacks.
+
+`knowledge_search` accepts `item_types` and observation `categories`.
+`knowledge_related` discovers native graph neighbors within explicit namespaces.
+For configured semantic retrieval, set `backend.semantic_search=true` and select `retrieval_mode="semantic"` or `"hybrid"`.
+Kajamite does not configure or download an embedding model.

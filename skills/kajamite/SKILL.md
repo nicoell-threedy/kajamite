@@ -3,7 +3,7 @@ name: kajamite
 description: Browse, retrieve and maintain shared Markdown knowledge through explicit namespaces. Use to continue work across conversations, organize related notes, and retain useful findings and commitments.
 ---
 
-# Shared knowledge through namespaces
+# Maintain knowledge through the unified engine
 
 A namespace is a directory inside the configured knowledge base. Existing
 folders already qualify. Namespaces can nest; they have no required overview,
@@ -20,7 +20,7 @@ shared reference notes explicitly when relevant, preserving their original home.
 
 Search names explicit namespaces. recursive=false searches immediate notes;
 recursive=true includes descendants. Use namespaces=["/"] and recursive=true
-for the whole base. Search is full-text, not semantic. An empty page with
+for the whole base. Search defaults to full-text. Explicit semantic/hybrid modes require backend configuration. An empty page with
 has_more=true is inconclusive: continue using next_cursor with the same query
 and scope. Do not treat a scan limit as absence. Lists use page/has_more instead.
 Context reports omitted and truncated notes; use knowledge_read and next_offset
@@ -76,3 +76,25 @@ Retained artifacts can live in the consumer's durable file store, with purpose
 and references in notes. Source applications remain authoritative for their own
 bookings, messages and calendar entries. A simple next action can be a Markdown
 checkbox; do not create two competing completion records.
+
+## Governed knowledge
+
+All public operations use the same knowledge engine.
+Plain preferences, proposals, and notes remain unreviewed knowledge with caller-defined meaning.
+A status field alone does not establish verified support.
+
+Use knowledge_record_create for a claim with explicit evidence, scope, and verification.
+Use knowledge_record_transition with the current expected revision and a unique operation ID.
+If a transition result is uncertain, inspect current state before a retry.
+Generic note edits and moves cannot bypass the record lifecycle.
+
+For ordinary governed reuse, supply request_scope and respect returned withholding reasons.
+If source checks are unavailable, do not describe a supported record as currently reusable.
+Use mode="inspect" to review authorized history or disputed knowledge.
+Use knowledge_record_maintain to record affected dependency changes.
+Use knowledge_record_remove only for explicitly authorized physical removal.
+Its result covers storage and bounded active-index evidence, not backups or external copies.
+
+Use item_types=["observation"] and categories to retrieve specific native observations.
+Use knowledge_related for explicit bounded graph context across the selected namespaces.
+Relations aid navigation. Only explicit record dependencies govern invalidation.

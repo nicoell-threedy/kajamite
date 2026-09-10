@@ -13,6 +13,7 @@ from mcp.client.stdio import stdio_client
 from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID
 
 from kajamite import receipt
+from kajamite.errors import MutationUncertain
 from kajamite.server import INSTRUCTIONS, OPERATIONS, create_server
 from kajamite.ui import RESOURCE_URI
 
@@ -44,6 +45,8 @@ class ProtocolService:
         }
 
     async def edit(self, identifier: str, find_text=None, replacement=None, metadata=None) -> dict[str, Any]:
+        if identifier == "uncertain":
+            raise MutationUncertain("Mutation outcome is uncertain; inspect current state before retrying.")
         return {"note": {"identifier": identifier}}
 
     async def list(self, namespace="/", depth=1, page=1, page_size=20, glob=None, sort=None) -> dict[str, Any]:
@@ -51,6 +54,21 @@ class ProtocolService:
 
     async def context(self, namespace=None, identifiers=None, page=1, page_size=5, max_chars=12000) -> dict[str, Any]:
         return {"notes": [], "omitted": []}
+
+    async def related(self, identifier: str, namespaces: list[str], depth: int = 1, max_notes: int = 10, max_chars: int = 12000) -> dict[str, Any]:
+        return {"notes": [], "partial": False}
+
+    async def record_maintain(self, namespace: str, condition_id: str, timestamp: str, actor: str, reason: str) -> dict[str, Any]:
+        return {"completed": [], "partial": False}
+
+    async def record_remove(self, identifier: str, expected_revision: int) -> dict[str, Any]:
+        return {"identifier": identifier, "projection": "absent"}
+
+    async def record_create(self, namespace: str, record: dict[str, Any]) -> dict[str, Any]:
+        return {"committed_revision": 1}
+
+    async def record_transition(self, identifier: str, action: str, expected_revision: int, operation_id: str, timestamp: str, actor: str, reason: str, changes: dict[str, Any] | None = None) -> dict[str, Any]:
+        return {"committed_revision": expected_revision + 1}
 
     async def move(self, identifier: str, destination: str, is_namespace=False) -> dict[str, Any]:
         return {"mutation": {"moved": True}}
@@ -102,6 +120,10 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(missing.is_error)
             failed = await session.call_tool("knowledge_read", {"identifier": "explode"})
             self.assertTrue(failed.is_error)
+            self.assertNotIn("synthetic service failure", str(failed.content))
+            uncertain = await session.call_tool("knowledge_edit", {"identifier": "uncertain"})
+            self.assertTrue(uncertain.is_error)
+            self.assertIn("inspect current state before retrying", str(uncertain.content))
 
             resource = await session.read_resource("kajamite://guide")
             content = resource.model_dump(mode="json", by_alias=True)["contents"][0]["text"]

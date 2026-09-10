@@ -1,5 +1,24 @@
 # Validation
 
+## Governed record engine development
+
+On 2026-09-10, all 30 source/protocol tests passed on Windows with Python
+3.12.14 and MCP SDK 2.1.1. Six independent governance tests cover lifecycle
+history, source validation callbacks, schema isolation, Markdown round trips,
+changed versus inaccessible evidence, and content-free summaries.
+
+The wheel installed into a separate environment with no runtime dependencies.
+All six governance tests passed there. A separate interpreter with site packages
+disabled imported the engine without MCP, YAML, or OpenTelemetry modules.
+The documentation example ran successfully. Wheel inspection found the engine
+and no development caches. The frontend reports a missing MCP extra without
+a traceback; its version command works when that extra is installed.
+
+The native Basic Memory acceptance suite and Linux checks were not rerun for
+this increment. Note operations and backend protocol behavior did not change.
+The engine produces validated record values; these checks do not prove atomic
+persistence, authorization, retrieval filtering, or physical erasure.
+
 ## Publication checks
 
 On 2026-09-10, all 24 source/protocol tests passed on Linux with MCP SDK 2.1.1.
@@ -83,3 +102,30 @@ Version 0.1 passed its 15 source/protocol tests, native Windows/Linux commission
 and a single fresh-agent project-continuity case. Those results established the
 old interface's behavior, not the suitability of its project abstraction. They
 are not evidence that the namespace replacement has passed its new cases.
+
+## Unified engine acceptance
+
+On 2026-09-10, all 54 source and protocol tests passed on Linux Python 3.12.
+The suite includes revision conflicts, current-record filtering, dependency changes,
+removal projection errors, and an engine-only restart with site packages disabled.
+The original native Basic Memory 0.23.0 commissioning suite also passed.
+It retained namespace moves, concurrent writes, receipts, and continuation beyond 250 outside hits.
+
+The capability audit passed observation/category retrieval, nested metadata,
+typed relations, graph neighbor paths, and native deletion.
+The first native engine scenario passed persistence, restart, scope checks,
+source-change withholding, revalidation, and operation replay.
+The installed cross-frontend scenario also passed Python/MCP revision parity,
+MCP lifecycle changes, CLI inspection, dependency maintenance, and removal evidence.
+Independent review led to stricter duplicate-identity and mutation-readback checks.
+Unconfirmed writes raise `MutationUncertain`; callers must inspect before retrying.
+
+The fixed retrieval corpus returned a 54-character observation versus a
+1000-character entity preview. Both searches recovered the relevant source.
+The engine's current-note check added one backend call in this fixture.
+See `docs/retrieval-evaluation.md` for measurements and limits.
+
+Native CI exposed repeated entity rows with identical paths and IDs. Search
+now deduplicates candidates within each call, including its native page scan.
+Distinct observations and relations remain separate. Offset cursors still do
+not promise a stable snapshot across concurrent projection changes.

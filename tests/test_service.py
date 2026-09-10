@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
 from kajamite.backend import BackendError
-from kajamite.service import KnowledgeError, KnowledgeService
+from kajamite.service import KnowledgeError, NoteOperations as KnowledgeService
 
 
 class FakeBackend:
@@ -269,7 +269,7 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("backend_confirmed", namespace_change["verification"])
         await self.service.create("Again", "body", "source-two")
         self.backend.directory_destination = "wrong/place"
-        with self.assertRaisesRegex(KnowledgeError, "requested path"):
+        with self.assertRaisesRegex(BackendError, "requested path"):
             await self.service.move("source-two", "archive/source-two", is_namespace=True)
         self.backend.directory_destination = None
         self.backend.fail_move = True

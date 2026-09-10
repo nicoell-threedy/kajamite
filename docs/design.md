@@ -1,8 +1,14 @@
 # Namespaces and explicit knowledge access
 
-Kajamite 0.3 exposes generic capabilities above an externally managed Basic
-Memory project. Its units are namespaces (directories), notes, links and optional
-metadata. Domain workflows belong in the consuming skill, not in tool schemas.
+All public note and record operations use `KnowledgeEngine`.
+The [engine contract](engine-contract.md) defines persistence, eligibility, and consumer hooks.
+`RecordEngine` validates portable records and lifecycle history inside that engine.
+The MCP frontend is optional. The Basic Memory adapter uses a public MCP client.
+The engine itself has no third-party runtime dependency.
+
+Namespaces, notes, observations, and relations remain useful knowledge units.
+Governed claims add explicit evidence, scope, revisions, and lifecycle transitions.
+Plain notes retain caller-defined meaning and remain visibly unreviewed.
 
 ## Namespace semantics
 
@@ -25,6 +31,12 @@ or mutation rather than guessing case or slugs. Bare ambiguous titles are not
 accepted as note addresses.
 
 ## Search implementation
+
+The engine now exposes observation/category filters and native graph discovery.
+See the [versioned capability audit](basic-memory-capability-audit.md).
+Every returned candidate passes current-note and eligibility checks.
+Semantic/hybrid modes require explicit backend configuration.
+
 
 The installed Basic Memory 0.23.0 public MCP tool lacks a directory search filter.
 Text and permalink glob are alternative search modes; neither supports combining
@@ -52,14 +64,15 @@ snapshot during concurrent changes.
 
 knowledge_context selects either one namespace page or explicit note identifiers.
 It returns structured notes within a total body-character budget, omitted notes,
-read errors and per-note continuation. It does not follow links or produce a
-hidden-model summary. Metadata/listing overhead is outside the body budget.
+read errors and per-note continuation. It does not follow links implicitly or produce a hidden-model summary.
+`knowledge_related` performs explicit bounded native graph discovery. Metadata/listing overhead is outside the body budget.
 Cross-namespace references can be selected explicitly alongside the working notes.
 
 Creation uses overwrite=false and inserts no content or relationships. Editing
 merges generic metadata and/or replaces exactly one current body passage. Native
 reserved metadata keys that the backend ignores are rejected instead of silently
-pretending they changed. Arbitrary user status/type conventions are not enforced.
+pretending they changed. Arbitrary user status/type conventions do not certify support.
+Reserved engine metadata requires the record operations.
 
 Note and namespace moves delegate to native move_note. Root/path traversal moves
 are invalid; destinations cannot overwrite unrelated notes. Returned addresses
@@ -69,8 +82,8 @@ reorganized automatically based on their type or legacy metadata.
 
 Cooperating processes share an OS mutation lock. Readback verifies note changes;
 uncertain writes are not retried blindly. Direct backend writers and human editors
-remain outside that lock. Installation, credentials, backups and source-provider
-access remain consumer responsibilities. No knowledge shadow store is created.
+remain outside that lock. Installation, credentials, backups and source-provider access remain consumer responsibilities.
+The engine coordinates record persistence and revision checks within this writer boundary. No knowledge shadow store is created.
 
 ## Knowledge change receipts
 
@@ -133,3 +146,12 @@ tool names or required arguments. Existing project-era Markdown and metadata
 remain user data and can be read or explicitly edited with ordinary
 tools. No automatic data migration, compatibility aliases or namespace manifests
 are introduced. Consumers update their skill, tool vocabulary and package pin.
+
+## Unified engine upgrade
+
+Version 0.4 routes Python, CLI, and MCP operations through one engine.
+Governed records use reserved nested metadata and a readable claim body.
+Generic writes cannot bypass record transitions.
+The engine withholds records with stale revisions, unsuitable scope, or unresolved evidence checks.
+Full removal reports backend and active-index evidence separately.
+It does not claim removal from backups or external copies.

@@ -12,8 +12,7 @@ from mcp.types import PaginatedRequestParams
 from .config import Settings
 
 
-class BackendError(RuntimeError):
-    """An upstream operation failed; an interrupted mutation may have committed."""
+from .errors import BackendError
 
 
 def unpack(result):
@@ -89,6 +88,8 @@ class Backend:
         return file_lock(self.settings.lock_path(), self.settings.timeout)
 
     async def call(self, name, arguments):
+        if name == "search_notes" and arguments.get("search_type") in {"semantic", "hybrid", "vector"} and not self.settings.semantic_search:
+            raise BackendError("Semantic retrieval requires explicit backend.semantic_search=true and a configured backend model.")
         args = dict(arguments)
         args.update(project=self.project, output_format="json")
         if self.settings.project_id:
@@ -103,7 +104,7 @@ class Backend:
         except BackendError:
             raise
         except Exception as error:
-            mutation = name in {"write_note", "edit_note", "move_note"}
+            mutation = name in {"write_note", "edit_note", "move_note", "delete_note"}
             detail = " A change may have committed; read the note before retrying." if mutation else " No result is available."
             raise BackendError("Basic Memory transport failed." + detail) from error
         finally:
@@ -140,7 +141,16 @@ class Backend:
                 raise BackendError(f"Basic Memory tool {name} is missing required parameters.")
         await self.call("search_notes", {"query": None, "page_size": 1, "entity_types": ["entity"]})
         return {"status": "ready", "backend": "Basic Memory", "project": self.project,
-                "tools": sorted(required)}
+                "tools": sorted(required),
+                "capabilities": {
+                    "observation_search": "entity_types" in catalog.get("search_notes", {}).get("properties", {}),
+                    "category_filter": "categories" in catalog.get("search_notes", {}).get("properties", {}),
+                    "graph_context": "build_context" in catalog,
+                    "delete_note": "delete_note" in catalog,
+                    "native_path_filter": False,
+                    "atomic_compare_and_swap": False,
+                    "semantic_search": "enabled_by_consumer" if self.settings.semantic_search else "disabled",
+                }}
 
 
 @asynccontextmanager
