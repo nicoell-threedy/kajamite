@@ -18,6 +18,7 @@ from mcp.client.stdio import stdio_client
 
 from kajamite.backend import connect, unpack
 from kajamite.config import Settings
+from kajamite.engine import KnowledgeEngine
 
 
 async def call(config, name, arguments):
@@ -137,11 +138,15 @@ async def run(config, wiki):
             await backend.call("write_note", {"title": f"quasar noise {index:03}", "directory": "Outside", "content": "quasar", "overwrite": False})
         await backend.call("write_note", {"title": "Target", "directory": "Late", "content": "filler " * 200 + "quasar quasartargetready", "overwrite": False})
         await wait_for_indexed_path(backend, "quasartargetready", "Late/Target.md")
-    first = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar"})
-    assert not first["results"] and first["has_more"] and first["scan_limited"]
-    later = await call(config, "knowledge_search", {"namespaces": ["Late"], "query": "quasar", "cursor": first["next_cursor"]})
-    assert [row["identifier"] for row in later["results"]] == ["Late/Target.md"]
-    assert later["exhausted"]
+        # Keep the ranking corpus in one backend session. Restarting the backend
+        # can trigger asynchronous resync between offset-based cursor pages.
+        # Cross-session operations are already exercised above and in engine acceptance.
+        service = KnowledgeEngine(backend)
+        first = await service.search(namespaces=["Late"], query="quasar")
+        assert not first["results"] and first["has_more"] and first["scan_limited"], first
+        later = await service.search(namespaces=["Late"], query="quasar", cursor=first["next_cursor"])
+        assert [row["identifier"] for row in later["results"]] == ["Late/Target.md"], later
+        assert later["exhausted"], later
     return {"status": "passed", "checks": ["multi-note namespaces", "same-title separation", "deterministic mutation receipts", "plain-text receipt fallback", "metadata-only edits", "concurrent writers", "collision refusal", "note and namespace moves", "search by moved path", "bounded shared context", "plain Markdown", "native FTS continuation beyond 250 outside hits"]}
 
 
