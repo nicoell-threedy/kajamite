@@ -105,7 +105,7 @@ are not evidence that the namespace replacement has passed its new cases.
 
 ## Unified engine acceptance
 
-On 2026-09-10, all 53 source and protocol tests passed on Linux Python 3.12.
+On 2026-09-10, all 54 source and protocol tests passed on Linux Python 3.12.
 The suite includes revision conflicts, current-record filtering, dependency changes,
 removal projection errors, and an engine-only restart with site packages disabled.
 The original native Basic Memory 0.23.0 commissioning suite also passed.
@@ -124,3 +124,8 @@ The fixed retrieval corpus returned a 54-character observation versus a
 1000-character entity preview. Both searches recovered the relevant source.
 The engine's current-note check added one backend call in this fixture.
 See `docs/retrieval-evaluation.md` for measurements and limits.
+
+Native CI exposed repeated entity rows with identical paths and IDs. Search
+now deduplicates candidates within each call, including its native page scan.
+Distinct observations and relations remain separate. Offset cursors still do
+not promise a stable snapshot across concurrent projection changes.

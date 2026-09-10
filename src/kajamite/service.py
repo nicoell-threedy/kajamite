@@ -57,6 +57,7 @@ class NoteOperations:
         native_page, skip = divmod(offset, self._native_page_size)
         native_page += 1
         results: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str]] = set()
         scanned = pages = 0
         exhausted = False
 
@@ -87,6 +88,13 @@ class NoteOperations:
                 scanned += 1
                 item = self._search_item(row)
                 if item and self._in_scopes(item["file_path"], scopes, recursive):
+                    # Native projections can repeat entities, including across pages.
+                    # Keep distinct observations/relations within the same note.
+                    detail = "" if item["item_type"] == "entity" else str((item["item_id"], item["category"], item["snippet"]))
+                    identity = (item["file_path"], str(item["item_type"]), detail)
+                    if identity in seen:
+                        continue
+                    seen.add(identity)
                     results.append(item)
                     if len(results) == page_size:
                         stopped = True

@@ -43,3 +43,19 @@ class RetrievalTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(native['entity_types'], ['observation'])
         with self.assertRaises(ValueError):
             await service.search(['Notes'], query='marker', item_types=['observation'], categories=['decision'], cursor=page['next_cursor'])
+
+    async def test_search_deduplicates_native_entities_but_preserves_distinct_observations(self):
+        backend = FakeBackend()
+        service = NoteOperations(backend)
+        repeated = FakeBackend._note("Notes/first.md", "First", "marker")
+        other = FakeBackend._note("Notes/second.md", "Second", "marker")
+        backend.search_rows = [repeated] * 51 + [other]
+        result = await service.search(["Notes"], query="marker")
+        self.assertEqual(["Notes/first.md", "Notes/second.md"], [row["identifier"] for row in result["results"]])
+        self.assertEqual(52, result["scanned_results"])
+        self.assertTrue(result["exhausted"])
+        first = dict(repeated, type="observation", observation_id="one")
+        second = dict(repeated, type="observation", observation_id="two")
+        backend.search_rows = [first, first, second]
+        result = await service.search(["Notes"], query="marker", item_types=["observation"])
+        self.assertEqual(["one", "two"], [row["item_id"] for row in result["results"]])
