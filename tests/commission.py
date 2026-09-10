@@ -174,7 +174,13 @@ def main():
             result = asyncio.run(run(config, wiki))
         finally:
             cleanup(temporary)
-        print(json.dumps(result))
+        print(json.dumps(result), flush=True)
+        # The existing CI entrypoint commissions every supported engine surface.
+        import subprocess
+        import sys
+        for script in ("capability_audit.py", "commission_engine.py"):
+            subprocess.run([sys.executable, str(Path(__file__).with_name(script)),
+                            "--basic-memory", args.basic_memory], check=True)
 
 
 if __name__ == "__main__":
