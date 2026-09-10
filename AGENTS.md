@@ -19,3 +19,16 @@ must stay identical. Dependency changes update `uv.lock` and regenerate the
 hashed pip lock using `uv export --locked --no-emit-project --no-header --format
 requirements-txt --output-file requirements.lock`. Never put machine paths in
 generated lock headers.
+
+## Publication boundary
+
+Keep consumer names, host names, canonical project identifiers, machine paths,
+and deployment evidence outside this repository. Use generic descriptions and
+synthetic fixtures, including in commit messages and validation reports.
+Do not copy private operating notes into public documentation.
+
+Run `git config core.hooksPath .githooks` in each developer clone.
+The pre-commit check scans the index. The pre-push check scans outgoing history.
+Run `python tools/check_publication.py HEAD` before publication.
+The checks report categories and object IDs without printing private values.
+Review new documentation for private context that automated rules cannot detect.

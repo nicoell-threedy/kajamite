@@ -161,3 +161,18 @@ Kajamite takes its name from Kaja'mite in Warcraft lore. This independent projec
 contains no game assets and is not affiliated with Blizzard Entertainment.
 
 Licensed under [MIT](LICENSE).
+
+### Publication checks
+
+Enable the local commit and push checks in each developer clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Run `python tools/check_publication.py HEAD` to check reachable history.
+The normal test suite checks the index and available checkout history.
+CI uses a shallow checkout, so local pre-push checks provide the full-history check.
+These checks detect known private identifiers and selected credential, address,
+and machine-path patterns. They do not replace review for private context or
+comprehensive secret scanning. Commit author names and email addresses are allowed.

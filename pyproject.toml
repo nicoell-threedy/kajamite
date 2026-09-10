@@ -19,4 +19,4 @@ kajamite = "kajamite.__main__:main"
 packages = ["src/kajamite"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "skills", "docs", "README.md", "LICENSE", "pyproject.toml", "uv.lock", "requirements.lock", ".github"]
+include = ["src", "tests", "tools", "skills", "docs", "README.md", "LICENSE", "pyproject.toml", "uv.lock", "requirements.lock", ".github"]

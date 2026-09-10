@@ -1,5 +1,12 @@
 # Validation
 
+## Publication checks
+
+On 2026-09-10, all 24 source/protocol tests passed on Linux with MCP SDK 2.1.1.
+Four publication tests cover private-identifier matching, safe diagnostic output,
+staged content, and sensitive content removed by a later commit. The publication
+scanner also passed against the complete branch and release-tag history.
+
 ## Version 0.3.2
 
 Run source and protocol checks with:
