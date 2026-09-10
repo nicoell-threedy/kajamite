@@ -1,9 +1,14 @@
 """Small, static MCP vocabulary shared with the command line."""
+from functools import wraps
+
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.apps import Apps, ResourceCsp
 from mcp.types import ToolAnnotations
 
 from . import __version__
+from .errors import BackendError, MutationUncertain
+from .service import KnowledgeError
 from .ui import RESOURCE_URI, html
 
 
@@ -29,6 +34,19 @@ def guide():
     return files("kajamite").joinpath("SKILL.md").read_text(encoding="utf-8")
 
 
+def _operation(method):
+    """Keep deliberate engine errors visible without exposing unexpected exceptions."""
+    @wraps(method)
+    async def invoke(*args, **kwargs):
+        try:
+            return await method(*args, **kwargs)
+        except (MutationUncertain, KnowledgeError, ValueError) as error:
+            raise ToolError(str(error)) from error
+        except BackendError as error:
+            raise ToolError("Backend operation failed. A pending write may have committed; inspect current state before retrying.") from error
+    return invoke
+
+
 def create_server(service):
     apps = Apps()
     mutation_tools = ("knowledge_create", "knowledge_edit", "knowledge_move", "knowledge_record_create", "knowledge_record_transition", "knowledge_record_remove")
@@ -45,7 +63,7 @@ def create_server(service):
                 idempotent_hint=False,
                 open_world_hint=False,
             ),
-        )(getattr(service, method))
+        )(_operation(getattr(service, method)))
     apps.add_html_resource(
         RESOURCE_URI,
         html(),
@@ -67,7 +85,7 @@ def create_server(service):
         server.tool(name=name, description=description, structured_output=True, annotations=ToolAnnotations(
             read_only_hint=readonly, destructive_hint=name in {"knowledge_edit", "knowledge_move", "knowledge_record_transition", "knowledge_record_remove", "knowledge_record_maintain"},
             idempotent_hint=readonly, open_world_hint=False,
-        ))(getattr(service, method))
+        ))(_operation(getattr(service, method)))
 
     @server.resource("kajamite://guide", description="How to resume, capture, correct and maintain shared knowledge")
     def knowledge_guide() -> str:
