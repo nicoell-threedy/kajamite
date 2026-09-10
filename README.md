@@ -1,16 +1,22 @@
 # Kajamite
 
-Shared knowledge access through namespaces, built on Basic Memory.
+Portable, evidence-aware knowledge infrastructure for agents.
 
-Kajamite gives assistants explicit namespace access to an existing Markdown
-knowledge base. A namespace is an ordinary directory: no registration, mandatory
-overview, project object or lifecycle is required. Work with one note or several,
-link related knowledge, and preserve useful context across conversations.
+Kajamite is a reusable knowledge engine for Python applications, command-line
+clients, and optional MCP servers. It preserves ordinary Markdown while adding
+evidence, scope, revision history, lifecycle maintenance, and inspectable reuse
+decisions for governed claims. Basic Memory supplies storage, search, and graph
+discovery through its public interface.
+
+A namespace is an ordinary directory. Work with one note or several, link related
+knowledge, and preserve useful context across applications and conversations.
 
 ## Install
 
-The Python record engine has no runtime dependencies. Install the `mcp` extra
-to use the CLI/MCP note tools. The hashed requirements below include that extra.
+The Python knowledge engine has no runtime dependencies: install it with
+`pip install .` from this checkout. Install the `basic-memory` extra for that
+backend adapter, or the `mcp` extra for the MCP frontend. Both extras currently
+use the same MCP client/server SDK. The hashed requirements include this SDK.
 
 Use Python 3.11 or newer on Windows or Linux. Install and configure Basic Memory
 separately; this release is tested against 0.23.0. Select an existing project.
