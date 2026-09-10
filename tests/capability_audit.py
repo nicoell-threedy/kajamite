@@ -10,6 +10,16 @@ from kajamite.backend import connect
 from kajamite.config import Settings
 
 
+async def wait_for_projection(backend, name, arguments, ready):
+    for attempt in range(120):
+        result = await backend.call(name, arguments)
+        if ready(result):
+            return result
+        if attempt < 119:
+            await asyncio.sleep(0.25)
+    raise AssertionError(f"native {name} projection did not converge: {result!r}")
+
+
 async def audit(config):
     async with connect(Settings.load(config)) as backend:
         catalog = await backend.session.list_tools()
@@ -21,14 +31,20 @@ async def audit(config):
             result = await backend.call('write_note', {'title': title, 'content': body, 'directory': 'Example',
                                                        'overwrite': False, 'metadata': {'audit': {'version': 1}}})
             await wait_for_indexed_path(backend, 'quasarport', result['file_path'])
-        results = await backend.call('search_notes', {'query': 'quasarport', 'search_type': 'text',
-                                                     'entity_types': ['observation'], 'categories': ['fact'],
-                                                     'page': 1, 'page_size': 10})
+        results = await wait_for_projection(backend, 'search_notes',
+            {'query': 'quasarport', 'search_type': 'text', 'entity_types': ['observation'],
+             'categories': ['fact'], 'page': 1, 'page_size': 10},
+            lambda value: any(row.get('file_path') == 'Example/Manual.md' for row in value['results']))
         assert any(row['file_path'] == 'Example/Manual.md' for row in results['results']), results
         note = await backend.call('read_note', {'identifier': 'Example/Manual.md', 'include_frontmatter': False})
         assert note['frontmatter']['audit'] == {'version': 1}
-        graph = await backend.call('build_context', {'url': 'Example/Deployment.md', 'timeframe': None,
-                                                    'depth': 1, 'page_size': 1, 'max_related': 10})
+        def graph_ready(value):
+            related = [item for row in value['results'] for item in row['related_results']]
+            return (any(item.get('relation_type') == 'depends_on' for item in related)
+                    and any(item.get('file_path') == 'Example/Manual.md' and item['type'] == 'entity' for item in related))
+        graph = await wait_for_projection(backend, 'build_context',
+            {'url': 'Example/Deployment.md', 'timeframe': None, 'depth': 1, 'page_size': 1, 'max_related': 10},
+            graph_ready)
         related = [item for row in graph['results'] for item in row['related_results']]
         assert any(item.get('relation_type') == 'depends_on' for item in related)
         assert any(item.get('file_path') == 'Example/Manual.md' and item['type'] == 'entity' for item in related)
