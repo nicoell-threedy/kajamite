@@ -383,7 +383,10 @@ class NoteOperations:
 
     async def _call_mutation(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         try:
-            return await self.backend.call(name, arguments)
+            result = await self.backend.call(name, arguments)
+            if not isinstance(result, dict):
+                raise MutationUncertain("Mutation returned an invalid acknowledgment; inspect current state before retrying.")
+            return result
         except BackendError as error:
             raise MutationUncertain("Mutation outcome is uncertain; a write may have committed. Inspect current state before retrying.") from error
 
@@ -439,7 +442,7 @@ class NoteOperations:
     def _mutation_identifier(result: dict[str, Any]) -> str:
         value = result.get("file_path") or result.get("permalink")
         if not isinstance(value, str) or not value:
-            raise KnowledgeError("mutation returned no usable identifier")
+            raise MutationUncertain("Mutation returned no usable identifier; a write may have committed. Inspect the requested namespace before retrying.")
         return value
 
     @classmethod

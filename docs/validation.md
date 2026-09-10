@@ -105,7 +105,7 @@ are not evidence that the namespace replacement has passed its new cases.
 
 ## Unified engine acceptance
 
-On 2026-09-10, all 52 source and protocol tests passed on Linux Python 3.12.
+On 2026-09-10, all 53 source and protocol tests passed on Linux Python 3.12.
 The suite includes revision conflicts, current-record filtering, dependency changes,
 removal projection errors, and an engine-only restart with site packages disabled.
 The original native Basic Memory 0.23.0 commissioning suite also passed.

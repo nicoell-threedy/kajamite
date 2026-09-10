@@ -45,6 +45,16 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_create_without_acknowledged_identity_is_uncertain(self):
+        original = self.backend.call
+        async def lose_acknowledgment(name, arguments):
+            result = await original(name, arguments)
+            return {} if name == "write_note" else result
+        self.backend.call = lose_acknowledgment
+        with self.assertRaises(MutationUncertain):
+            await self.engine.create("Committed", "Synthetic content.", "facts")
+        self.assertTrue(self.backend.notes)
+
     async def test_plain_notes_remain_unreviewed_and_cannot_claim_governance(self):
         ordinary = await self.engine.create("Preference", "Tea", "personal", metadata={"status": "supported"})
         read = await self.engine.read(ordinary["note"]["identifier"])
