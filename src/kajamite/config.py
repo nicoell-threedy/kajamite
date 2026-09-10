@@ -17,6 +17,7 @@ class Settings:
     timeout: float = 60
     state_dir: Path | None = None
     telemetry_file: Path | None = None
+    semantic_search: bool = False
 
     @classmethod
     def load(cls, path: str | Path):
@@ -32,6 +33,9 @@ class Settings:
             raise ValueError("backend.args must be a list of strings")
         if not isinstance(env, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
             raise ValueError("backend.env must contain string values")
+        semantic_search = backend.get("semantic_search", False)
+        if not isinstance(semantic_search, bool):
+            raise ValueError("backend.semantic_search must be a boolean")
         timeout = backend.get("timeout", 60)
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout <= 600:
             raise ValueError("backend.timeout must be between 0 and 600 seconds")
@@ -48,7 +52,7 @@ class Settings:
             return (config_path.parent / Path(raw).expanduser()).resolve()
 
         return cls(backend["command"], args, backend["project"], project_id, env,
-                   timeout, configured_path("state_dir"), configured_path("telemetry_file"))
+                   timeout, configured_path("state_dir"), configured_path("telemetry_file"), semantic_search)
 
     def lock_path(self):
         # One backend-wide lock is adequate for interactive note updates.

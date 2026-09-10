@@ -51,6 +51,39 @@ class GovernanceTests(unittest.TestCase):
         with self.assertRaises(RecordError):
             engine.revalidate(disputed, disputed["verification"], **event(2))
 
+    def test_claim_markdown_round_trips_with_canonical_line_endings_and_boundaries(self):
+        engine = RecordEngine()
+        claim = "\r\n# Synthetic claim\r\n\r\nA paragraph.\r\n\r\n"
+        created = engine.create_record(
+            "bounded-claim", claim, {"system": "example"},
+            [{"observation_id": "observed", "statement": "Synthetic observation.",
+              "evidence_ids": ["source"]}],
+            {"source": {"kind": "document", "reference": "example:manual@1", "observed_at": STAMP}},
+            {"record_revision": 1, "verified_at": STAMP, "verifier": "reviewer",
+             "outcome": "supported", "evidence_ids": ["source"]},
+            timestamp=STAMP, actor="reviewer", reason="Evidence reviewed", event_id="created-boundary",
+        )
+        self.assertEqual(created["claim"], "\n# Synthetic claim\n\nA paragraph.\n\n")
+        markdown = engine.serialize_record(created)
+        self.assertTrue(markdown.endswith(created["claim"]))
+        self.assertEqual(engine.parse_record(markdown.replace("\n", "\r\n")), created)
+        revised = engine.revise(created, claim="\r\nRevised claim.\r\n\r\n", **event(1))
+        self.assertEqual(engine.parse_record(engine.serialize_record(revised)), revised)
+
+    def test_imported_semantic_history_rejects_stale_verification(self):
+        engine = RecordEngine()
+        disputed = engine.dispute(record(engine), **event(1))
+        revalidated = engine.revalidate(disputed, {
+            **disputed["verification"], "record_revision": 3,
+            "verified_at": event(2)["timestamp"], "outcome": "supported",
+        }, **event(2))
+        forged = copy.deepcopy(revalidated)
+        stale = forged["events"][1]["snapshot"]["verification"]["verified_at"]
+        forged["events"][2]["snapshot"]["verification"]["verified_at"] = stale
+        forged["verification"]["verified_at"] = stale
+        with self.assertRaisesRegex(RecordError, "newer than the prior semantic verification"):
+            engine.validate_record(forged)
+
     def test_changed_evidence_is_distinct_from_inaccessible_evidence(self):
         engine = RecordEngine()
         original = record(engine)
@@ -120,8 +153,7 @@ class GovernanceTests(unittest.TestCase):
         command = "import sys; sys.path.insert(0, sys.argv[1]); import kajamite.__main__"
         result = subprocess.run([sys.executable, "-I", "-S", "-c", command, source],
                                 text=True, capture_output=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Install 'kajamite[mcp]'", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
 

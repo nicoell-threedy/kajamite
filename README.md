@@ -69,20 +69,21 @@ project-local skill mechanism, or run `kajamite skill` to print it. The same gui
 is available as the `kajamite://guide` MCP resource. No particular client plugin
 or lifecycle hook is required.
 
-## Embedded governed records
+## Unified knowledge engine
 
-`kajamite.governance.RecordEngine` supplies an optional Python API for
-evidence-backed claims, revision history, and lifecycle transitions. It uses
-the standard library and opens no backend connection. Consumers supply source
-validation, atomic persistence, and retrieval policy.
+`kajamite.KnowledgeEngine` supplies the shared Python operation API.
+CLI and MCP operations call that engine.
+Install `kajamite` for an embedded engine with a consumer-supplied backend.
+Install `kajamite[basic-memory]` for its public Basic Memory client adapter.
+Install `kajamite[mcp]` to expose the engine through the MCP server.
 
-The engine can revise, dispute, revalidate, supersede, or retract a record.
-It distinguishes changed evidence from inaccessible evidence and preserves
-the claim when a deterministic check marks it for review. Markdown records
-contain a current claim and complete lifecycle snapshots.
+Plain notes, preferences, and proposals retain their meaning without invented verification.
+Governed claims add evidence, scope, revision history, and explicit lifecycle operations.
+The engine checks current records before reuse and explains withheld results.
 
-See [the engine guide](docs/governance.md) for an executable example and the
-integration contract. The ordinary note tools do not enforce this lifecycle.
+The [engine contract](docs/engine-contract.md) defines the ownership boundary.
+The [capability audit](docs/basic-memory-capability-audit.md) records observed backend features and limits.
+The [record guide](docs/governance.md) describes record construction and validation.
 
 ## Tools
 
@@ -148,7 +149,7 @@ runs: existing `type: project`, status values and legacy membership fields remai
 readable user data. Update the skill and client tool approvals with the package.
 Version 0.3 keeps those tool contracts and adds mutation receipt fields plus an
 optional MCP Apps presentation; it performs no data migration.
-Version 0.4 adds the independent record engine. Install `kajamite[mcp]` for
+Version 0.4 makes the unified engine the shared operation path. Install `kajamite[mcp]` for
 the existing note frontend, or `kajamite` for dependency-free embedding.
 
 ## Ownership and operation
@@ -196,3 +197,21 @@ CI uses a shallow checkout, so local pre-push checks provide the full-history ch
 These checks detect known private identifiers and selected credential, address,
 and machine-path patterns. They do not replace review for private context or
 comprehensive secret scanning. Commit author names and email addresses are allowed.
+
+## Evidence-aware operations
+
+`knowledge_record_create` persists a revision-one record in an explicit namespace.
+`knowledge_record_transition` requires an expected revision and a unique operation ID.
+It supports revision, dispute, revalidation, supersession, retraction, and source/dependency health changes.
+`knowledge_record_maintain` marks affected dependents for review.
+`knowledge_record_remove` removes one exact record and reports active-index evidence.
+
+Reads, search, listings, and context accept `mode="reuse"` or `mode="inspect"`.
+Governed reuse requires matching `request_scope` and an injected source checker.
+The default CLI has no source-specific checker, so it withholds governed claims from reuse.
+Inspection remains available. Consumers can construct the engine with their own policy callbacks.
+
+`knowledge_search` accepts `item_types` and observation `categories`.
+`knowledge_related` discovers native graph neighbors within explicit namespaces.
+For configured semantic retrieval, set `backend.semantic_search=true` and select `retrieval_mode="semantic"` or `"hybrid"`.
+Kajamite does not configure or download an embedding model.

@@ -8,7 +8,7 @@ import json
 import re
 from typing import Any
 
-from .backend import BackendError
+from .errors import BackendError, MutationUncertain
 from . import receipt
 
 
@@ -16,7 +16,7 @@ class KnowledgeError(RuntimeError):
     """The requested knowledge operation could not be completed safely."""
 
 
-class KnowledgeService:
+class NoteOperations:
     _native_page_size = 50
     _native_page_budget = 5
     _reserved_metadata = {"title", "type", "permalink"}
@@ -33,13 +33,23 @@ class KnowledgeService:
         metadata: dict[str, Any] | None = None,
         cursor: str | None = None,
         page_size: int = 10,
+        retrieval_mode: str = "text",
+        item_types: list[str] | None = None,
+        categories: list[str] | None = None,
     ) -> dict[str, Any]:
         if not isinstance(namespaces, list) or not namespaces:
             raise ValueError("namespaces must be a nonempty list")
         if page_size < 1 or page_size > 100:
             raise ValueError("page_size must be between 1 and 100")
+        if retrieval_mode not in {"text", "semantic", "hybrid"}:
+            raise ValueError("retrieval_mode must be text, semantic, or hybrid")
+        item_types = item_types or ["entity"]
+        if not isinstance(item_types, list) or not item_types or any(item not in {"entity", "observation", "relation"} for item in item_types):
+            raise ValueError("item_types must select entity, observation, or relation")
+        if categories is not None and (not isinstance(categories, list) or not categories or any(not isinstance(item, str) or not item for item in categories)):
+            raise ValueError("categories must be a nonempty list of strings")
         scopes = list(dict.fromkeys(self._namespace(value) for value in namespaces))
-        criteria = [str(getattr(self.backend, "project", "")), query, scopes, recursive, kind, metadata]
+        criteria = [str(getattr(self.backend, "project", "")), query, scopes, recursive, kind, metadata, retrieval_mode, item_types, categories]
         fingerprint = hashlib.sha256(
             json.dumps(criteria, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
@@ -53,11 +63,13 @@ class KnowledgeService:
         while pages < self._native_page_budget:
             arguments: dict[str, Any] = {
                 "query": query,
-                "search_type": "text",
-                "entity_types": ["entity"],
+                "search_type": retrieval_mode,
+                "entity_types": item_types,
                 "page": native_page,
                 "page_size": self._native_page_size,
             }
+            if categories is not None:
+                arguments["categories"] = categories
             if kind is not None:
                 arguments["note_types"] = [kind]
             if metadata is not None:
@@ -95,7 +107,8 @@ class KnowledgeService:
             "next_cursor": None if exhausted else self._encode_cursor(offset, fingerprint),
             "has_more": not exhausted,
             "exhausted": exhausted,
-            "retrieval_mode": "text",
+            "retrieval_mode": retrieval_mode,
+            "complete_scope_search": exhausted and retrieval_mode == "text",
             "scanned_results": scanned,
             "scan_limited": scan_limited,
         }
@@ -120,12 +133,17 @@ class KnowledgeService:
             raise ValueError("metadata cannot set reserved fields: " + ", ".join(sorted(reserved)))
         directory = self._namespace(namespace).lstrip("/")
         async with self.backend.mutation():
-            result = await self.backend.call(
+            result = await self._call_mutation(
                 "write_note",
                 {"title": title, "content": content, "directory": directory,
                  "note_type": kind, "metadata": metadata, "overwrite": False},
             )
-            note = await self._read_full(self._mutation_identifier(result))
+            identifier = self._mutation_identifier(result)
+            if not self._in_scopes(identifier, [self._namespace(namespace)], False):
+                raise MutationUncertain("Create returned a different namespace; a write may have committed. Inspect current state before retrying.")
+            note = await self._read_after_mutation(identifier)
+            if not self._body_matches(note["content"], content) or any(self._metadata(note).get(key) != value for key, value in (metadata or {}).items()):
+                raise MutationUncertain("Create readback did not match requested content or metadata; a write may have committed. Inspect current state before retrying.")
             change = receipt.for_create(note)
             return {
                 "mutation": result, "note": self._public_note(note),
@@ -152,6 +170,7 @@ class KnowledgeService:
             raise ValueError("a body replacement or metadata is required")
         async with self.backend.mutation():
             before = await self._read_full(identifier)
+            await self._check_generic_note(before)
             body = before["content"]
             if find_text is not None and body.count(find_text) != 1:
                 raise KnowledgeError("find_text must occur exactly once in the note body")
@@ -165,12 +184,12 @@ class KnowledgeService:
                 arguments.update(find_text=find_text, expected_replacements=1)
             if metadata:
                 arguments["metadata"] = metadata
-            result = await self.backend.call("edit_note", arguments)
-            after = await self._read_full(self._identifier(before))
+            result = await self._call_mutation("edit_note", arguments)
+            after = await self._read_after_mutation(self._identifier(before))
             if after["content"] != expected or any(
                 self._metadata(after).get(key) != value for key, value in (metadata or {}).items()
             ):
-                raise KnowledgeError("edit readback did not match the requested changes")
+                raise MutationUncertain("edit readback did not match the requested changes; a write may have committed. Inspect current state before retrying.")
             change = receipt.for_edit(
                 before, after, find_text=find_text, replacement=replacement,
                 metadata_keys=set(metadata or {}),
@@ -268,6 +287,41 @@ class KnowledgeService:
             "content_is_data": True,
         }
 
+    async def related(
+        self, identifier: str, namespaces: list[str], depth: int = 1,
+        max_notes: int = 10, max_chars: int = 12_000,
+    ) -> dict[str, Any]:
+        """Discover native graph neighbors, then read current scoped knowledge."""
+        if not namespaces or not isinstance(namespaces, list):
+            raise ValueError("namespaces must be a nonempty list")
+        if not 1 <= depth <= 3 or not 1 <= max_notes <= 20 or not 1 <= max_chars <= 50_000:
+            raise ValueError("depth must be 1..3, max_notes 1..20, and max_chars 1..50000")
+        scopes = [self._namespace(value) for value in namespaces]
+        seed = await self._read_full(identifier)
+        if not self._in_scopes(self._identifier(seed), scopes, True):
+            raise ValueError("the starting note is outside the requested namespaces")
+        native = await self.backend.call("build_context", {
+            "url": seed.get("permalink") or identifier, "depth": depth,
+            "timeframe": None, "page": 1, "page_size": 1, "max_related": 100,
+        })
+        selected = [self._identifier(seed)]
+        excluded = 0
+        for result in native.get("results", []):
+            for item in [result.get("primary_result", {}), *result.get("related_results", [])]:
+                path = item.get("file_path")
+                if not isinstance(path, str) or item.get("type") != "entity":
+                    continue
+                if not self._in_scopes(path, scopes, True):
+                    excluded += 1
+                elif path not in selected:
+                    selected.append(path)
+        limited = len(selected) > max_notes or bool(native.get("has_more")) or native.get("metadata", {}).get("related_count", 0) >= 100
+        bundle = await self.context(identifiers=selected[:max_notes], max_chars=max_chars)
+        return bundle | {"graph": {"depth": depth, "selected_notes": len(selected[:max_notes]),
+                                   "excluded_outside_scope": excluded, "limited": limited,
+                                   "source": "basic_memory_relations"},
+                         "partial": bool(bundle["partial"] or limited or excluded)}
+
     async def move(
         self, identifier: str, destination: str, is_namespace: bool = False
     ) -> dict[str, Any]:
@@ -277,15 +331,16 @@ class KnowledgeService:
             if source == "/":
                 raise ValueError("the root namespace cannot be moved")
             async with self.backend.mutation():
-                result = await self.backend.call(
+                await self._check_namespace_move(source)
+                result = await self._call_mutation(
                     "move_note",
                     {"identifier": source.lstrip("/"), "destination_path": destination,
                      "is_directory": True},
                 )
                 if result.get("moved") is not True:
-                    raise KnowledgeError("Basic Memory did not confirm the namespace move")
+                    raise MutationUncertain("Basic Memory did not confirm the namespace move; a write may have committed. Inspect current state before retrying.")
                 if self._relative_path(str(result.get("destination", ""))) != destination:
-                    raise KnowledgeError("the namespace did not move to the requested path")
+                    raise MutationUncertain("the namespace did not move to the requested path; a write may have committed. Inspect current state before retrying.")
                 namespace = "/" + destination.strip("/")
                 change = receipt.for_namespace_move(source, namespace, result)
                 return {
@@ -295,27 +350,54 @@ class KnowledgeService:
 
         async with self.backend.mutation():
             before = await self._read_full(identifier)
-            result = await self.backend.call(
+            await self._check_generic_note(before)
+            result = await self._call_mutation(
                 "move_note",
                 {"identifier": self._identifier(before), "destination_path": destination,
                  "is_directory": False},
             )
             if result.get("moved") is not True:
-                raise KnowledgeError("Basic Memory did not confirm the note move")
+                raise MutationUncertain("Basic Memory did not confirm the note move; a write may have committed. Inspect current state before retrying.")
             actual = result.get("file_path") or destination
             if self._relative_path(str(actual)) != destination:
-                raise KnowledgeError("the note did not move to the requested path")
-            after = await self._read_full(destination)
+                raise MutationUncertain("the note did not move to the requested path; a write may have committed. Inspect current state before retrying.")
+            after = await self._read_after_mutation(destination)
             if after["content"] != before["content"] or any(
                 self._metadata(after).get(key) != value
                 for key, value in self._metadata(before).items() if key != "permalink"
             ):
-                raise KnowledgeError("move readback did not preserve the note")
+                raise MutationUncertain("move readback did not preserve the note; a write may have committed. Inspect current state before retrying.")
             change = receipt.for_note_move(before, after)
             return {
                 "mutation": result, "note": self._public_note(after),
                 "knowledge_change": change, "knowledge_change_text": receipt.render(change),
             }
+
+    @staticmethod
+    def _body_matches(body: str, expected: str) -> bool:
+        body = body.replace("\r\n", "\n").replace("\r", "\n")
+        expected = expected.replace("\r\n", "\n").replace("\r", "\n")
+        return expected in {body, body[1:] if body.startswith("\n") else body,
+                            body[:-1] if body.endswith("\n") else body,
+                            body[1:-1] if body.startswith("\n") and body.endswith("\n") else body}
+
+    async def _call_mutation(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return await self.backend.call(name, arguments)
+        except BackendError as error:
+            raise MutationUncertain("Mutation outcome is uncertain; a write may have committed. Inspect current state before retrying.") from error
+
+    async def _read_after_mutation(self, identifier: str) -> dict[str, Any]:
+        try:
+            return await self._read_full(identifier)
+        except (BackendError, KnowledgeError) as error:
+            raise MutationUncertain("Readback failed after a mutation; a write may have committed. Inspect current state before retrying.") from error
+
+    async def _check_generic_note(self, note: dict[str, Any]) -> None:
+        """Internal mutation hook, called while the backend lock is held."""
+
+    async def _check_namespace_move(self, namespace: str) -> None:
+        """Internal namespace hook, called while the backend lock is held."""
 
     async def _read_full(self, identifier: str) -> dict[str, Any]:
         payload = await self.backend.call(
@@ -378,6 +460,9 @@ class KnowledgeService:
             "identifier": row["file_path"], "file_path": row["file_path"],
             "title": row.get("title", ""), "permalink": row.get("permalink"),
             "snippet": str(snippet)[:1_000], "metadata": cls._metadata(row),
+            "item_type": row.get("type", row.get("entity_type", "entity")),
+            "item_id": row.get("observation_id", row.get("relation_id", row.get("external_id"))),
+            "category": row.get("category"),
         }
 
     @classmethod
@@ -448,3 +533,11 @@ class KnowledgeService:
 
 
 __all__ = ["BackendError", "KnowledgeError", "KnowledgeService"]
+
+
+def __getattr__(name):
+    # Preserve the previous Python entrypoint while routing through the engine.
+    if name == "KnowledgeService":
+        from .engine import KnowledgeEngine
+        return KnowledgeEngine
+    raise AttributeError(name)

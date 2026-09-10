@@ -70,6 +70,16 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(timeout, (int, float))
         self.assertEqual(2.5, timeout)
 
+    async def test_semantic_search_requires_explicit_consumer_configuration(self):
+        session = RecordingSession()
+        backend = Backend(session, Settings("bm", [], "shared"))
+        with self.assertRaisesRegex(BackendError, "explicit"):
+            await backend.call("search_notes", {"query": "example", "search_type": "semantic"})
+        self.assertEqual([], session.calls)
+        enabled = Backend(session, Settings("bm", [], "shared", semantic_search=True))
+        await enabled.call("search_notes", {"query": "example", "search_type": "hybrid"})
+        self.assertEqual("hybrid", session.calls[-1][1]["search_type"])
+
     async def test_telemetry_is_optional_content_free_and_nonblocking(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

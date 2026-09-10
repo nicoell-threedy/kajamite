@@ -7,21 +7,28 @@ import sys
 
 from . import __version__
 from .config import Settings
-try:
-    from .backend import connect
-    from .server import OPERATIONS, create_server, guide
-    from .service import KnowledgeService
-except ModuleNotFoundError as error:
-    if error.name == "mcp":
-        raise SystemExit("The note frontend requires the MCP extra. Install 'kajamite[mcp]'.") from None
-    raise
+from .operations import OPERATIONS
+
+
+def guide():
+    from importlib.resources import files
+    return files("kajamite").joinpath("SKILL.md").read_text(encoding="utf-8")
+
 
 
 async def execute(args):
+    try:
+        from .backend import connect
+    except ModuleNotFoundError as error:
+        if error.name == "mcp":
+            raise RuntimeError("The Basic Memory adapter requires the MCP client. Install 'kajamite[basic-memory]'.") from None
+        raise
+    from .engine import KnowledgeEngine
     settings = Settings.load(args.config)
     async with connect(settings) as backend:
-        service = KnowledgeService(backend)
+        service = KnowledgeEngine(backend)
         if args.command == "serve":
+            from .server import create_server
             await backend.check()
             await create_server(service).run_stdio_async()
         elif args.command == "doctor":

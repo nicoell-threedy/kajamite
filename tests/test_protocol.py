@@ -52,6 +52,21 @@ class ProtocolService:
     async def context(self, namespace=None, identifiers=None, page=1, page_size=5, max_chars=12000) -> dict[str, Any]:
         return {"notes": [], "omitted": []}
 
+    async def related(self, identifier: str, namespaces: list[str], depth: int = 1, max_notes: int = 10, max_chars: int = 12000) -> dict[str, Any]:
+        return {"notes": [], "partial": False}
+
+    async def record_maintain(self, namespace: str, condition_id: str, timestamp: str, actor: str, reason: str) -> dict[str, Any]:
+        return {"completed": [], "partial": False}
+
+    async def record_remove(self, identifier: str, expected_revision: int) -> dict[str, Any]:
+        return {"identifier": identifier, "projection": "absent"}
+
+    async def record_create(self, namespace: str, record: dict[str, Any]) -> dict[str, Any]:
+        return {"committed_revision": 1}
+
+    async def record_transition(self, identifier: str, action: str, expected_revision: int, operation_id: str, timestamp: str, actor: str, reason: str, changes: dict[str, Any] | None = None) -> dict[str, Any]:
+        return {"committed_revision": expected_revision + 1}
+
     async def move(self, identifier: str, destination: str, is_namespace=False) -> dict[str, Any]:
         return {"mutation": {"moved": True}}
 

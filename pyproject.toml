@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kajamite"
-version = "0.4.0.dev0"
+version = "0.4.0"
 description = "Shared knowledge access through namespaces, built on Basic Memory"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,6 +14,7 @@ dependencies = []
 
 [project.optional-dependencies]
 mcp = ["mcp==2.1.1"]
+basic-memory = ["mcp==2.1.1"]
 
 [project.scripts]
 kajamite = "kajamite.__main__:main"

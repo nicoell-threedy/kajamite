@@ -73,6 +73,10 @@ class RecordEngine:
             self._error(f'{label} must be non-empty text')
         return value
 
+    def _canonical_claim(self, value: Any) -> str:
+        """Normalize Markdown line endings without changing its body boundaries."""
+        return self._require_text(value, 'claim').replace('\r\n', '\n').replace('\r', '\n')
+
     def _require_utc(self, value: Any, label: str) -> str:
         value = self._require_text(value, label)
         if not _UTC_TIMESTAMP.fullmatch(value):
@@ -282,6 +286,8 @@ class RecordEngine:
                 self._require_verification_not_after_event(verification, event['timestamp'])
                 if action in {'create', 'revise', 'dispute', 'revalidate'} and verification['record_revision'] != expected_revision:
                     self._error('semantic verification must bind the resulting record revision')
+                if action in {'revise', 'dispute', 'revalidate'}:
+                    self._require_fresh_verification(previous_snapshot['verification'], verification, expected_revision)
                 if event['snapshot']['status'] != event['resulting_status']:
                     self._error('event result and snapshot status differ')
                 previous_status = event['resulting_status']
@@ -296,6 +302,12 @@ class RecordEngine:
         expected = {'type', 'schema_version', 'record_id', 'record_revision', 'status', 'claim', 'scope', 'observations', 'evidence', 'verification', 'depends_on', 'superseded_by', 'events'}
         if set(value) != expected:
             self._error('record projection is incomplete or has unknown fields')
+        value['claim'] = self._canonical_claim(value['claim'])
+        events = value.get('events')
+        if isinstance(events, list):
+            for event in events:
+                if isinstance(event, dict) and isinstance(event.get('snapshot'), dict) and 'claim' in event['snapshot']:
+                    event['snapshot']['claim'] = self._canonical_claim(event['snapshot']['claim'])
         self._validate_projection(value, check_events=True)
         return value
 
@@ -314,7 +326,7 @@ class RecordEngine:
         """Create a record with revision one and one complete create snapshot."""
         if status not in _CREATION_STATUSES:
             self._error('creation status is invalid')
-        record: dict[str, Any] = {'type': self.record_type, 'schema_version': SCHEMA_VERSION, 'record_id': record_id, 'record_revision': 1, 'status': status, 'claim': claim, 'scope': self._clone(dict(scope)), 'observations': self._clone(observations), 'evidence': self._clone(dict(evidence)), 'verification': self._clone(dict(verification)), 'depends_on': self._clone(depends_on or []), 'superseded_by': None, 'events': []}
+        record: dict[str, Any] = {'type': self.record_type, 'schema_version': SCHEMA_VERSION, 'record_id': record_id, 'record_revision': 1, 'status': status, 'claim': self._canonical_claim(claim), 'scope': self._clone(dict(scope)), 'observations': self._clone(observations), 'evidence': self._clone(dict(evidence)), 'verification': self._clone(dict(verification)), 'depends_on': self._clone(depends_on or []), 'superseded_by': None, 'events': []}
         self._validate_projection(record, check_events=False)
         self._require_verification_not_after_event(record['verification'], timestamp)
         record['events'].append(self._event(record, 'create', prior_status=None, timestamp=timestamp, actor=actor, reason=reason, event_id=event_id))
@@ -348,7 +360,7 @@ class RecordEngine:
         changed = any((value is not None for value in (claim, scope, observations, evidence, depends_on)))
         target_revision = result['record_revision'] + 1
         if claim is not None:
-            result['claim'] = claim
+            result['claim'] = self._canonical_claim(claim)
         if scope is not None:
             result['scope'] = self._clone(dict(scope))
         if observations is not None:
@@ -413,7 +425,7 @@ class RecordEngine:
         """Serialize a validated record as inspectable Markdown with JSON frontmatter."""
         value = self.validate_record(record)
         frontmatter = {'permalink': f"{self.permalink_prefix}/{value['record_id']}", **{key: self._clone(item) for key, item in value.items() if key != 'claim'}}
-        return '---\n' + json.dumps(frontmatter, indent=2, ensure_ascii=False, sort_keys=True) + '\n---\n' + value['claim'].rstrip('\r\n') + '\n'
+        return '---\n' + json.dumps(frontmatter, indent=2, ensure_ascii=False, sort_keys=True) + '\n---\n' + value['claim']
 
     def parse_record(self, text: str) -> dict[str, Any]:
         """Parse and validate one serialized governed Markdown record."""
@@ -433,7 +445,7 @@ class RecordEngine:
         if not isinstance(frontmatter, dict):
             self._error('frontmatter must be an object')
         permalink = frontmatter.pop('permalink', None)
-        claim = text[delimiter + 5:].lstrip('\n').rstrip('\r\n')
+        claim = text[delimiter + 5:]
         value = dict(frontmatter)
         value['claim'] = claim
         record = self.validate_record(value)

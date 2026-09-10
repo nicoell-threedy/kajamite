@@ -1,9 +1,10 @@
-# Embedded governed records
+# Portable governed records
 
 `RecordEngine` validates and transforms evidence-backed records. It does not
 open files, connect to Basic Memory, run a model, or configure telemetry.
 
-Install `kajamite` for the engine. Install `kajamite[mcp]` for the note frontend.
+`KnowledgeEngine` uses this record validator for persistent operations.
+Install `kajamite` for the engine. Install `kajamite[mcp]` for the optional MCP frontend.
 The frontend's MCP dependency does not constrain an engine-only consumer.
 
 ## Create and review a record
@@ -63,15 +64,13 @@ Events have strictly increasing timestamps and complete snapshots. Each lifecycl
 action can change only its defined fields. Superseded and retracted records are
 terminal. Deterministic source changes preserve claim meaning.
 
-The engine returns defensive copies. A consumer must serialize writes, compare
-the expected etag, and persist the returned record atomically. It must validate
-dependency and supersession graphs across records. It must handle projection
-failure after a committed write and define physical erasure across derived stores.
+The standalone `RecordEngine` helper returns defensive copies without persistence.
+`KnowledgeEngine` coordinates writes, expected revisions, dependency checks, and removal evidence.
+A consumer that uses only the helper must supply those operations itself.
 `compute_etag` supplies a hash; it does not perform a compare-and-swap transaction.
 
-Generic note access must not bypass the consumer's governance boundary. The
-consumer must protect writes and filter reads, snippets, listings, and context.
-Installing the engine does not add those protections to ordinary note tools.
+Generic note access must not bypass the consumer's governance boundary. The unified engine applies these protections to public note operations.
+Using `RecordEngine` alone provides validation without persistence or retrieval policy.
 
 ## Telemetry
 
@@ -82,3 +81,24 @@ record identifier, actor, or reason. It does not prove that persistence succeede
 The consumer can attach these facts to its existing trace after persistence.
 The engine creates no exporter, event store, or trace context. Serialized records
 and normal change receipts contain knowledge and must not become telemetry.
+
+## Persistent engine API
+
+Create `KnowledgeEngine(backend, authorize=..., evidence_checker=...)` for persistence and retrieval.
+Both callbacks can be synchronous or asynchronous.
+`authorize(identifier, request_scope)` returns an explicit boolean before a selected note is read.
+The default allows local access. The callback is consumer policy, not a namespace permission system.
+
+`evidence_checker(record, request_scope)` returns `True` or an outcome object.
+An outcome of `unchanged` allows source reuse.
+Other outcomes include `changed`, `missing`, `removed`, `inaccessible`, and `unknown`.
+A missing callback withholds supported claims. Callback errors produce an inaccessible-check result.
+The engine checks record scope and lifecycle independently of the callback.
+
+Dependency revisions bind to semantic verification.
+A changed dependency revision withholds reuse before batch maintenance runs.
+Maintenance persists the resulting review state without changing the claim.
+
+Direct removal of all engine metadata can erase record identity.
+The engine cannot authenticate history against deliberate replacement of the whole Markdown record.
+Version control and consumer backup procedures remain necessary for that recovery case.

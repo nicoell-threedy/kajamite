@@ -53,6 +53,7 @@ def prepare(root, command):
         "BASIC_MEMORY_HOME": str(root / "default"),
         "BASIC_MEMORY_FORCE_LOCAL": "true", "BASIC_MEMORY_AUTO_UPDATE": "false",
         "BASIC_MEMORY_NO_PROMOS": "1", "BASIC_MEMORY_LOGFIRE_ENABLED": "false",
+        "BASIC_MEMORY_SEMANTIC_SEARCH_ENABLED": "false",
     }
     wiki = root / "notes"
     wiki.mkdir(exist_ok=True)
