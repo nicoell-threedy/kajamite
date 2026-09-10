@@ -1,5 +1,24 @@
 # Validation
 
+## Governed record engine development
+
+On 2026-09-10, all 30 source/protocol tests passed on Windows with Python
+3.12.14 and MCP SDK 2.1.1. Six independent governance tests cover lifecycle
+history, source validation callbacks, schema isolation, Markdown round trips,
+changed versus inaccessible evidence, and content-free summaries.
+
+The wheel installed into a separate environment with no runtime dependencies.
+All six governance tests passed there. A separate interpreter with site packages
+disabled imported the engine without MCP, YAML, or OpenTelemetry modules.
+The documentation example ran successfully. Wheel inspection found the engine
+and no development caches. The frontend reports a missing MCP extra without
+a traceback; its version command works when that extra is installed.
+
+The native Basic Memory acceptance suite and Linux checks were not rerun for
+this increment. Note operations and backend protocol behavior did not change.
+The engine produces validated record values; these checks do not prove atomic
+persistence, authorization, retrieval filtering, or physical erasure.
+
 ## Publication checks
 
 On 2026-09-10, all 24 source/protocol tests passed on Linux with MCP SDK 2.1.1.

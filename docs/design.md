@@ -1,5 +1,10 @@
 # Namespaces and explicit knowledge access
 
+The ordinary note interface and the optional governed-record engine have
+separate contracts. The [engine guide](governance.md) defines the Python API,
+its consumer hooks, and its persistence boundary. Ordinary status metadata does
+not activate governance. The engine needs no MCP frontend or runtime dependency.
+
 Kajamite 0.3 exposes generic capabilities above an externally managed Basic
 Memory project. Its units are namespaces (directories), notes, links and optional
 metadata. Domain workflows belong in the consuming skill, not in tool schemas.

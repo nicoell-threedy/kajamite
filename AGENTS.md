@@ -16,7 +16,7 @@ Keep `docs/validation.md` accurate about what was actually tested.
 
 The packaged `src/kajamite/SKILL.md` and installable `skills/kajamite/SKILL.md`
 must stay identical. Dependency changes update `uv.lock` and regenerate the
-hashed pip lock using `uv export --locked --no-emit-project --no-header --format
+hashed pip lock using `uv export --locked --all-extras --no-emit-project --no-header --format
 requirements-txt --output-file requirements.lock`. Never put machine paths in
 generated lock headers.
 

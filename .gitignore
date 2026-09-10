@@ -1,5 +1,6 @@
 .venv/
 .backend/
+.engine/
 __pycache__/
 *.pyc
 *.egg-info/

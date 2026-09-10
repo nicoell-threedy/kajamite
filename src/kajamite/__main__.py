@@ -6,10 +6,15 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from .backend import connect
 from .config import Settings
-from .server import OPERATIONS, create_server, guide
-from .service import KnowledgeService
+try:
+    from .backend import connect
+    from .server import OPERATIONS, create_server, guide
+    from .service import KnowledgeService
+except ModuleNotFoundError as error:
+    if error.name == "mcp":
+        raise SystemExit("The note frontend requires the MCP extra. Install 'kajamite[mcp]'.") from None
+    raise
 
 
 async def execute(args):

@@ -9,6 +9,9 @@ link related knowledge, and preserve useful context across conversations.
 
 ## Install
 
+The Python record engine has no runtime dependencies. Install the `mcp` extra
+to use the CLI/MCP note tools. The hashed requirements below include that extra.
+
 Use Python 3.11 or newer on Windows or Linux. Install and configure Basic Memory
 separately; this release is tested against 0.23.0. Select an existing project.
 Disable Basic Memory auto-update for a version-managed deployment.
@@ -23,11 +26,11 @@ Use `.venv/bin/python` on Linux or `.venv/Scripts/python.exe` on Windows:
 
 ```sh
 python -m pip install --require-hashes -r requirements.lock
-python -m pip install --no-deps .
+python -m pip install --no-deps '.[mcp]'
 ```
 
 In those two commands, replace `python` with the virtual environment's interpreter.
-For development with uv, `uv sync --locked` uses the checked-in dependency lock.
+For development with uv, `uv sync --locked --extra mcp` uses the checked-in dependency lock.
 
 Create a private TOML configuration outside version control:
 
@@ -65,6 +68,21 @@ Install [skills/kajamite/SKILL.md](skills/kajamite/SKILL.md) using your client's
 project-local skill mechanism, or run `kajamite skill` to print it. The same guide
 is available as the `kajamite://guide` MCP resource. No particular client plugin
 or lifecycle hook is required.
+
+## Embedded governed records
+
+`kajamite.governance.RecordEngine` supplies an optional Python API for
+evidence-backed claims, revision history, and lifecycle transitions. It uses
+the standard library and opens no backend connection. Consumers supply source
+validation, atomic persistence, and retrieval policy.
+
+The engine can revise, dispute, revalidate, supersede, or retract a record.
+It distinguishes changed evidence from inaccessible evidence and preserves
+the claim when a deterministic check marks it for review. Markdown records
+contain a current claim and complete lifecycle snapshots.
+
+See [the engine guide](docs/governance.md) for an executable example and the
+integration contract. The ordinary note tools do not enforce this lifecycle.
 
 ## Tools
 
@@ -130,6 +148,8 @@ runs: existing `type: project`, status values and legacy membership fields remai
 readable user data. Update the skill and client tool approvals with the package.
 Version 0.3 keeps those tool contracts and adds mutation receipt fields plus an
 optional MCP Apps presentation; it performs no data migration.
+Version 0.4 adds the independent record engine. Install `kajamite[mcp]` for
+the existing note frontend, or `kajamite` for dependency-free embedding.
 
 ## Ownership and operation
 
