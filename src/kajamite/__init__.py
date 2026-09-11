@@ -1,6 +1,6 @@
 """Knowledge continuity over an independently managed Basic Memory project."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 
 def __getattr__(name):

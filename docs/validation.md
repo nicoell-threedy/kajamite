@@ -142,3 +142,11 @@ The installed native engine commissioning also passed against Basic Memory 0.23.
 in separate Python environments. It covered restart, source-change withholding,
 revalidation, operation replay, Python/MCP revision parity, CLI inspection,
 dependency maintenance, and native removal evidence.
+
+Release review on 2026-09-11 also passed all 56 source/protocol tests on Linux.
+An independent diamond-dependency probe checked each shared premise once and
+withheld the root for inaccessible indirect evidence without changing stored notes.
+PR revision `4d918fabdd1b6d70dea46cfd5a58e59d3cab7854` passed all six
+Windows/Linux jobs in Actions run 34578345303, including native commissioning
+on both Python 3.12 platforms. Version 0.5.0 adds the compatible frontend API
+and strengthens premise eligibility; it changes no dependency pins or record schema.
