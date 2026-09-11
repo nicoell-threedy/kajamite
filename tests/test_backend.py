@@ -55,6 +55,27 @@ class UnpackTests(unittest.TestCase):
 
 
 class BackendTests(unittest.IsolatedAsyncioTestCase):
+    async def test_body_edit_does_not_replace_repeated_metadata_text(self):
+        for raw in ('---\nclaim: old\nhistory: old\n---\n\nold', 'old',
+                    '---\r\nclaim: old\r\n---\r\nold'):
+            session = RecordingSession(CallToolResult(content=[], structuredContent={"content": raw, "frontmatter": {"claim": "old"} if raw.startswith("---") else None}))
+            backend = Backend(session, Settings("bm", ["mcp"], "shared"))
+            await backend.call("edit_note", {"identifier": "note.md", "operation": "find_replace",
+                                            "find_text": "old", "content": "new"})
+            name, arguments, _ = session.calls[-1]
+            self.assertEqual("edit_note", name)
+            self.assertEqual(1, raw.count(arguments["find_text"]))
+            changed = raw.replace(arguments["find_text"], arguments["content"], 1)
+            self.assertTrue(changed.endswith("new"))
+            if raw.startswith("---"):
+                self.assertIn("claim: old", changed)
+            self.assertEqual("read_note", session.calls[0][0])
+        session = RecordingSession(CallToolResult(content=[], structuredContent={"content": "old old"}))
+        with self.assertRaisesRegex(ValueError, "exactly once"):
+            await Backend(session, Settings("bm", [], "shared")).call("edit_note", {
+                "identifier": "note.md", "operation": "find_replace", "find_text": "old", "content": "new"})
+        self.assertEqual(1, len(session.calls))
+
     async def test_call_injects_backend_scope_and_numeric_timeout(self):
         session = RecordingSession()
         settings = Settings("bm", ["mcp"], "shared", "uuid-1", timeout=2.5)

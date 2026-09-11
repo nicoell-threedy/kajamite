@@ -90,6 +90,8 @@ class Backend:
     async def call(self, name, arguments):
         if name == "search_notes" and arguments.get("search_type") in {"semantic", "hybrid", "vector"} and not self.settings.semantic_search:
             raise BackendError("Semantic retrieval requires explicit backend.semantic_search=true and a configured backend model.")
+        if name == "edit_note" and arguments.get("operation") == "find_replace":
+            arguments = await self._body_edit(arguments)
         args = dict(arguments)
         args.update(project=self.project, output_format="json")
         if self.settings.project_id:
@@ -109,6 +111,28 @@ class Backend:
             raise BackendError("Basic Memory transport failed." + detail) from error
         finally:
             self._telemetry(name, outcome, (time.monotonic() - start) * 1000)
+
+    async def _body_edit(self, arguments):
+        """Qualify a body replacement so native edits cannot match frontmatter."""
+        note = await self.call("read_note", {"identifier": arguments["identifier"],
+                                             "include_frontmatter": True})
+        raw = note.get("content")
+        if not isinstance(raw, str):
+            raise BackendError("Basic Memory returned no Markdown for the guarded edit.")
+        delimiter = "\r\n---\r\n" if raw.startswith("---\r\n") else "\n---\n"
+        if isinstance(note.get("frontmatter"), dict) and raw.startswith(("---\n", "---\r\n")):
+            if delimiter not in raw:
+                raise ValueError("Note frontmatter is not closed; no edit was started.")
+            body = raw.split(delimiter, 1)[1]
+            prefix = delimiter
+        else:
+            body, prefix = raw, ""
+        find = arguments.get("find_text")
+        if not isinstance(find, str) or not find or body.count(find) != 1:
+            raise ValueError("find_text must occur exactly once in the note body; no edit was started.")
+        return {**arguments, "find_text": prefix + body,
+                "content": prefix + body.replace(find, arguments["content"], 1),
+                "expected_replacements": 1}
 
     def _telemetry(self, name, outcome, duration):
         path = self.settings.telemetry_file

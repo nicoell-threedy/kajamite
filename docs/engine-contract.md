@@ -97,3 +97,12 @@ Each premise is checked once per reuse decision. Ordinary note links are not pre
 A failed premise check withholds the dependent with a `dependency_` reason.
 Inaccessible evidence does not alter the stored claim or its history; inspection
 remains available and must not be presented as freshly verified reuse.
+
+## Body edits through Basic Memory
+
+Basic Memory's native text replacement searches the whole Markdown file, including
+frontmatter. The adapter reads the full Markdown and qualifies the replacement with
+the closing frontmatter delimiter and complete current body. Claim text repeated in
+record history therefore remains unchanged. Generic note edits use the same path.
+This costs one additional read before a body edit. The existing mutation lock and
+post-write readback remain in effect; unrelated writers still require reconciliation.

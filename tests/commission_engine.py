@@ -52,6 +52,13 @@ async def run(config):
         assert (await engine.read(identifier, request_scope={'system': 'other'}))['withheld']
         note = await engine.create('Preference', 'Prefer the morning session.', 'Notes', kind='preference')
         assert (await engine.read(note['note']['identifier']))['review_status'] == 'unreviewed'
+        body_record = await engine.record_create('BodyEdits', make_record('body-change'))
+        revised = await engine.record_transition(body_record['identifier'], 'revise', 1, 'body-edit',
+            '2026-01-01T00:00:01.000000Z', 'reviewer', 'Correct claim text',
+            {'claim': 'A corrected synthetic claim.'})
+        assert revised['committed_revision'] == 2
+        assert revised['record']['claim'] == 'A corrected synthetic claim.'
+        assert revised['record']['events'][0] == body_record['record']['events'][0]
     # A new backend session reads the durable record, rather than process-local state.
     async with connect(settings) as backend:
         engine = KnowledgeEngine(backend, evidence_checker=lambda record, scope: True)

@@ -150,3 +150,11 @@ PR revision `4d918fabdd1b6d70dea46cfd5a58e59d3cab7854` passed all six
 Windows/Linux jobs in Actions run 34578345303, including native commissioning
 on both Python 3.12 platforms. Version 0.5.0 adds the compatible frontend API
 and strengthens premise eligibility; it changes no dependency pins or record schema.
+
+## Body replacement acceptance
+
+On 2026-09-11, 57 source/protocol tests passed on Windows Python 3.12.
+The Basic Memory 0.23.0 engine commissioning passed a claim-body revision while
+preserving the original event snapshot. The adapter regression also covers repeated
+metadata text, plain Markdown, CRLF framing, and rejection of ambiguous body matches.
+Body edits perform one additional full-Markdown read before the guarded native edit.
