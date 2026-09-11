@@ -129,3 +129,13 @@ Native CI exposed repeated entity rows with identical paths and IDs. Search
 now deduplicates candidates within each call, including its native page scan.
 Distinct observations and relations remain separate. Offset cursors still do
 not promise a stable snapshot across concurrent projection changes.
+
+## Embedded frontend and premise checks
+
+On 2026-09-11, all 56 source and protocol tests passed on Windows Python 3.12
+with MCP SDK 2.1.1. The embedding host exposes the same knowledge schemas,
+annotations, receipt resource, and guide as the standalone frontend. Its wrapper
+adds a host receipt ID while preserving mutation receipts, text fallback, and errors.
+Premise checks cover unchanged, changed, inaccessible, missing, and deleted evidence.
+These protocol checks do not establish visible rendering in any particular client.
+Native backend commissioning was not repeated for these frontend and reuse changes.

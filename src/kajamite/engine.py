@@ -91,6 +91,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             return False, "scope_mismatch"
         if record["status"] != "supported":
             return False, f"record_status_{record['status']}"
+        premises = []
         if record["depends_on"]:
             if namespace is None:
                 return False, "dependency_scope_unknown"
@@ -106,6 +107,8 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     if item["record_id"] in seen:
                         continue
                     seen.add(item["record_id"])
+                    if item["record_id"] != record["record_id"]:
+                        premises.append(item)
                     revisions = item["verification"].get("dependency_revisions", {})
                     for dependency in item["depends_on"]:
                         target = inventory.get(dependency)
@@ -116,6 +119,15 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                         pending.append(target)
             except (BackendError, KnowledgeError):
                 return False, "dependency_check_incomplete"
+        for premise in premises:
+            if any(request_scope.get(key) != value for key, value in premise["scope"].items()):
+                return False, "dependency_scope_mismatch"
+            allowed, reason = await self._check_evidence(premise, request_scope)
+            if not allowed:
+                return False, "dependency_" + reason
+        return await self._check_evidence(record, request_scope)
+
+    async def _check_evidence(self, record, request_scope) -> tuple[bool, str | None]:
         if self.evidence_checker is None:
             return False, "source_check_unknown"
         try:

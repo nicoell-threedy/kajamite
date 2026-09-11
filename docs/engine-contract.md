@@ -77,3 +77,23 @@ An embedded application needs no Kajamite server or ambient session scope.
 
 Source evidence and policy belong to the consumer.
 The package contains no provider credentials, model, scheduler, or telemetry exporter.
+
+## Embedded MCP frontend
+
+`kajamite.server.create_server(engine, name="Example", version="1", instructions="...")`
+returns an MCP server with the complete knowledge tool catalog, receipt UI, guide,
+and text fallback. Add application tools with the returned server's `tool` decorator.
+The optional `wrap_operation(name, callable)` hook wraps each knowledge operation.
+Use `functools.wraps` to retain its argument schema. A host can add context parameters
+with an explicit callable signature when needed by the MCP SDK.
+The wrapped callable translates deliberate engine errors to MCP tool errors.
+Return receipt fields at the top level when adding host receipt IDs or other metadata.
+Preserve error status; an uncertain mutation must not become a success receipt.
+Compatible presentation updates come from the installed Kajamite package.
+The frontend requires the `mcp` extra; engine-only imports remain dependency-free.
+
+Reuse checks source evidence for actual premises, including transitive premises.
+Each premise is checked once per reuse decision. Ordinary note links are not premises.
+A failed premise check withholds the dependent with a `dependency_` reason.
+Inaccessible evidence does not alter the stored claim or its history; inspection
+remains available and must not be presented as freshly verified reuse.
