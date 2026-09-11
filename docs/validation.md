@@ -138,4 +138,7 @@ annotations, receipt resource, and guide as the standalone frontend. Its wrapper
 adds a host receipt ID while preserving mutation receipts, text fallback, and errors.
 Premise checks cover unchanged, changed, inaccessible, missing, and deleted evidence.
 These protocol checks do not establish visible rendering in any particular client.
-Native backend commissioning was not repeated for these frontend and reuse changes.
+The installed native engine commissioning also passed against Basic Memory 0.23.0
+in separate Python environments. It covered restart, source-change withholding,
+revalidation, operation replay, Python/MCP revision parity, CLI inspection,
+dependency maintenance, and native removal evidence.
