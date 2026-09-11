@@ -47,7 +47,20 @@ def _operation(method):
     return invoke
 
 
-def create_server(service):
+def create_server(service, *, name="Kajamite", version=__version__,
+                  instructions=INSTRUCTIONS, wrap_operation=None):
+    """Build the shared knowledge frontend; hosts can add their own tools.
+
+    ``wrap_operation(tool_name, callable)`` optionally wraps every operation once
+    for host context, telemetry, or result adaptation. Preserve the callable's
+    signature (for example with functools.wraps) and receipt fields. Deliberate
+    engine errors are translated before the host wrapper receives them.
+    """
+    def operation(tool_name, method):
+        invoke = _operation(getattr(service, method))
+        return wrap_operation(tool_name, invoke) if wrap_operation else invoke
+
+    server_name = name
     apps = Apps()
     mutation_tools = ("knowledge_create", "knowledge_edit", "knowledge_move", "knowledge_record_create", "knowledge_record_transition", "knowledge_record_remove")
     for name in mutation_tools:
@@ -63,7 +76,7 @@ def create_server(service):
                 idempotent_hint=False,
                 open_world_hint=False,
             ),
-        )(_operation(getattr(service, method)))
+        )(operation(name, method))
     apps.add_html_resource(
         RESOURCE_URI,
         html(),
@@ -76,7 +89,7 @@ def create_server(service):
     )
 
     server = MCPServer(
-        "Kajamite", version=__version__, instructions=INSTRUCTIONS, extensions=[apps]
+        server_name, version=version, instructions=instructions, extensions=[apps]
     )
     for name, (method, description) in OPERATIONS.items():
         if name in mutation_tools:
@@ -85,7 +98,7 @@ def create_server(service):
         server.tool(name=name, description=description, structured_output=True, annotations=ToolAnnotations(
             read_only_hint=readonly, destructive_hint=name in {"knowledge_edit", "knowledge_move", "knowledge_record_transition", "knowledge_record_remove", "knowledge_record_maintain"},
             idempotent_hint=readonly, open_world_hint=False,
-        ))(_operation(getattr(service, method)))
+        ))(operation(name, method))
 
     @server.resource("kajamite://guide", description="How to resume, capture, correct and maintain shared knowledge")
     def knowledge_guide() -> str:

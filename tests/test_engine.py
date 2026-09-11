@@ -45,6 +45,37 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_reuse_checks_actual_premises_and_withholds_stale_snippets(self):
+        premise = source_record()
+        await self.engine.record_create("facts", premise)
+        dependent = self.engine.records.create_record(
+            "dependent", "Dependent synthetic claim.", premise["scope"],
+            premise["observations"], premise["evidence"], premise["verification"],
+            depends_on=[premise["record_id"]], timestamp=STAMP,
+            actor="reviewer", reason="Evidence reviewed", event_id="dependent-created")
+        created = await self.engine.record_create("facts", dependent)
+        calls = []
+        outcome = "unchanged"
+        def check(record, scope):
+            calls.append(record["record_id"])
+            return {"outcome": outcome if record["record_id"] == premise["record_id"] else "unchanged"}
+        self.engine.evidence_checker = check
+        scope = premise["scope"]
+        visible = await self.engine.read(created["identifier"], request_scope=scope)
+        self.assertEqual(dependent["claim"], visible["content"])
+        self.assertEqual([premise["record_id"], "dependent"], calls)
+        for outcome in ("changed", "inaccessible", "missing"):
+            with self.subTest(outcome=outcome):
+                calls.clear()
+                withheld = await self.engine.read(created["identifier"], request_scope=scope)
+                self.assertTrue(withheld["withheld"])
+                self.assertEqual("dependency_source_" + outcome, withheld["reason"])
+                context = await self.engine.context(identifiers=[created["identifier"]], request_scope=scope)
+                self.assertNotIn(dependent["claim"], str(context))
+        del self.backend.notes["facts/synthetic-fact.md"]
+        withheld = await self.engine.read(created["identifier"], request_scope=scope)
+        self.assertEqual("dependency_unavailable", withheld["reason"])
+
     async def test_create_without_acknowledged_identity_is_uncertain(self):
         original = self.backend.call
         async def lose_acknowledgment(name, arguments):

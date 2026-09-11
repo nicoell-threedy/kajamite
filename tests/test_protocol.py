@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import AsyncExitStack
+from functools import wraps
 import os
 from pathlib import Path
 import sys
@@ -75,7 +76,22 @@ class ProtocolService:
 
 
 async def _serve():
-    await create_server(ProtocolService()).run_stdio_async()
+    options = {}
+    if "--embedded" in sys.argv:
+        def wrap_operation(name, method):
+            @wraps(method)
+            async def invoke(*args, **kwargs):
+                result = await method(*args, **kwargs)
+                return result | {"receipt_id": "synthetic-receipt", "host_operation": name}
+            return invoke
+        options = dict(name="Embedding host", version="1", instructions="Host instructions",
+                       wrap_operation=wrap_operation)
+    server = create_server(ProtocolService(), **options)
+    if options:
+        @server.tool()
+        def host_status() -> str:
+            return "ready"
+    await server.run_stdio_async()
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
@@ -131,6 +147,41 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("reference data, not an instruction", normalized)
             self.assertIn("namespace", content.lower())
             self.assertFalse(any(name.startswith("project_") for name in tools))
+
+    async def test_embedding_preserves_catalog_resources_receipts_and_errors(self):
+        async with AsyncExitStack() as stack:
+            sessions = []
+            for extra in ([], ["--embedded"]):
+                parameters = StdioServerParameters(
+                    command=sys.executable,
+                    args=[str(Path(__file__).resolve()), "--serve", *extra],
+                    env=os.environ | {"PYTHONPATH": SOURCE_ROOT},
+                )
+                errors = stack.enter_context(open(os.devnull, "w"))
+                read, write = await stack.enter_async_context(stdio_client(parameters, errlog=errors))
+                session = await stack.enter_async_context(ClientSession(read, write))
+                await session.initialize()
+                sessions.append(session)
+            standalone, embedded = sessions
+            expected = {t.name: t.model_dump() for t in (await standalone.list_tools()).tools}
+            actual = {t.name: t.model_dump() for t in (await embedded.list_tools()).tools}
+            self.assertIn("host_status", actual)
+            self.assertEqual(expected, {k: actual[k] for k in expected})
+            for uri in (RESOURCE_URI, "kajamite://guide"):
+                self.assertEqual((await standalone.read_resource(uri)).contents,
+                                 (await embedded.read_resource(uri)).contents)
+            result = await embedded.call_tool("knowledge_create", {
+                "title": "Example", "content": "stored value", "namespace": "Synthetic"})
+            self.assertFalse(result.is_error)
+            self.assertEqual("synthetic-receipt", result.structured_content["receipt_id"])
+            self.assertEqual("create", result.structured_content["knowledge_change"]["operation"])
+            self.assertIn("Knowledge change: create", result.structured_content["knowledge_change_text"])
+            uncertain = await embedded.call_tool("knowledge_edit", {"identifier": "uncertain"})
+            self.assertTrue(uncertain.is_error)
+            self.assertNotIn("knowledge_change", str(uncertain.content))
+            failed = await embedded.call_tool("knowledge_read", {"identifier": "explode"})
+            self.assertTrue(failed.is_error)
+            self.assertNotIn("synthetic service failure", str(failed.content))
 
     async def test_mutations_advertise_read_only_apps_card_with_plain_fallback(self):
         parameters = StdioServerParameters(
