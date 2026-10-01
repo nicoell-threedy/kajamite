@@ -78,6 +78,10 @@ the same calculation without mutation; application always rechecks the hash.
 Generic revision cannot bypass governed-record lifecycle rules.
 For a governed record, `knowledge_record_transition` with `action="revise"`
 accepts either a complete `changes.claim` or `changes.replacements`, never both.
+For a changed body supplied through replacements, the receipt preserves those
+passages in the existing grouped-replacement shape. The backend write remains
+atomic, and the receipt retains governed metadata changes and readback identity.
+Supplying a complete claim retains the whole-body receipt behavior.
 The replacements use the same one-to-100 exact, unique, disjoint selection rules
 against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.

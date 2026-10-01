@@ -227,7 +227,7 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_governed_revise_replaces_disjoint_passages_and_preserves_history(self):
         original = source_record()
-        body = "# Claim\n\nFirst finding.\n\n| Name | Value |\n| ---- | ----- |\n| Ada  | 8     |\n\nLast line.\n"
+        body = "# Claim\n\n" + "Unchanged introduction.\n" * 150 + "First finding.\n\n" + "Unchanged context.\n" * 150 + "| Name | Value |\n| ---- | ----- |\n| Ada  | 8     |\n\nLast line.\n"
         record = self.engine.records.create_record(
             "selective", body, original["scope"], original["observations"],
             original["evidence"], original["verification"],
@@ -250,6 +250,15 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("needs_revalidation", revised["record"]["verification"]["outcome"])
         self.assertEqual(body, revised["record"]["events"][0]["snapshot"]["claim"])
         self.assertEqual(revised["record"], (await self.engine.read(identifier, mode="inspect"))["record"])
+        change = revised["knowledge_change"]
+        self.assertEqual("grouped_exact_replacement", change["body_change"]["kind"])
+        passages = change["body_change"]["replacements"]
+        self.assertEqual(["First finding.", "| Ada  | 8     |"], [p["before"]["preview"] for p in passages])
+        self.assertEqual(["Updated finding.", "| Ada  | 9     |"], [p["after"]["preview"] for p in passages])
+        self.assertFalse(any(p[side]["truncated"] for p in passages for side in ("before", "after")))
+        self.assertEqual({"kajamite_record", "kajamite_operations"}, {item["key"] for item in change["metadata_changes"]})
+        self.assertIn("Updated finding.", revised["knowledge_change_text"])
+        self.assertNotIn("Unchanged introduction.", str(change["body_change"]))
         writes = len([name for name, _ in self.backend.calls if name == "edit_note"])
         replay = await self.engine.record_transition(
             identifier, "revise", 1, "selective-1", "2026-01-01T00:00:00.000001Z",

@@ -1,5 +1,15 @@
 # Validation
 
+## Selected governed revision receipts
+
+The selected-replacement receipt path passes the 87-test source suite: 84 pass
+and three browser tests skip. An isolated native MCP revision changes two small
+passages in a 6,362-character topic, preserves its original history, and reads
+back the exact updated record. Both old/new passage pairs remain in the receipt
+and are visible in the packaged frontend's collapsed view in a synthetic host.
+Whole-claim clipping, internal metadata presentation, and desktop-host rendering
+are outside this change. No frontend bundle changes are required.
+
 ## Compact governed-record metadata
 
 On 2026-10-01, 87 source tests ran on Windows Python 3.12: 84 passed and three
