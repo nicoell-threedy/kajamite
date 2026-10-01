@@ -25,8 +25,11 @@ the same package directory as their parent. Source-checkout runs set `PYTHONPATH
 to the checkout's `src` directory.
 
 The 0.7.0 source distribution builds a wheel that installs in a separate virtual
-environment with the hashed dependency lock. All 86 tests run against that
-installed package: 83 pass and three browser checks are skipped. Native
+environment with the hashed dependency lock. In an isolated fixture with the
+wheel installed into `src` and no checkout package source, 86 tests run: 82 pass,
+three browser checks are skipped, and the source-history publication check is
+skipped because the fixture has no Git history. This layout prevents test import
+paths from selecting checkout code. Native
 commissioning also passes against the installed wheel, including concurrent
 writers and the governed lifecycle. Browser acceptance and client deployment
 remain unverified for this release.
