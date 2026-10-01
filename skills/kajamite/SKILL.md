@@ -191,12 +191,17 @@ A status field alone does not establish verified support.
 
 Use knowledge_record_create for a claim with explicit evidence, scope, and verification.
 Use knowledge_record_transition with the current expected revision and a unique operation ID.
+For a focused governed revision, use action="revise" and changes.replacements with
+objects containing find_text and replacement. Do not also supply changes.claim.
+Selections apply to the original body and must be unique and disjoint. Unselected
+text remains unchanged. Fresh verification is required for supported status.
 If a transition result is uncertain, inspect current state before a retry.
 Generic note edits and moves cannot bypass the record lifecycle.
 
 For ordinary governed reuse, supply request_scope and respect returned withholding reasons.
 If source checks are unavailable, do not describe a supported record as currently reusable.
-Use mode="inspect" to review authorized history or disputed knowledge.
+Use mode="inspect", include_history=false for a current working inspection.
+Use the default include_history=true for a full history audit.
 Use knowledge_record_maintain to record affected dependency changes.
 Use knowledge_record_remove only for explicitly authorized physical removal.
 Its result covers storage and bounded active-index evidence, not backups or external copies.

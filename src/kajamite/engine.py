@@ -19,7 +19,8 @@ from typing import Any, Callable, Mapping
 from . import receipt
 from .errors import BackendError, MutationUncertain
 from .governance import RecordEngine, RecordError
-from .service import KnowledgeError, NoteOperations
+from .record_storage import decode_record, encode_record
+from .service import KnowledgeError, NoteOperations, apply_exact_replacements
 from .maintenance import MaintenanceOperations
 
 
@@ -75,7 +76,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         if not isinstance(raw, dict):
             raise KnowledgeError("governed record metadata is invalid")
         try:
-            record = self.records.validate_record(raw)
+            record = decode_record(raw, str(note.get("content", "")), self.records)
         except RecordError as error:
             raise KnowledgeError("governed record metadata is invalid") from error
         if not self._body_matches(str(note.get("content", "")), record["claim"]):
@@ -249,12 +250,12 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             raise KnowledgeError("record_create requires a revision-one create record")
         directory = self._namespace(namespace).lstrip("/")
         await self._authorize((directory + "/" if directory else "") + value["record_id"] + ".md", None)
-        metadata = {self._record_key: value, self._operations_key: {}}
         async with self.backend.mutation():
             if any(item["record_id"] == value["record_id"] for item in await self._governed_inventory(namespace)):
                 raise KnowledgeError("record ID is already present in this namespace")
             dependencies = await self._validate_dependencies(namespace, value)
             self._bind_dependencies(value, dependencies)
+            metadata = {self._record_key: encode_record(value, value["claim"], self.records), self._operations_key: {}}
             result = await self._call_mutation("write_note", {
             "title": value["record_id"], "content": value["claim"], "directory": directory,
                 "note_type": self._governed_kind, "metadata": metadata, "overwrite": False,
@@ -303,12 +304,18 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     result = self._record_result(None, before, record, None, replayed=False)
                     result.update(outcome=health["outcome"], mutated=False, transient=health["transient"])
                     return result
-            updated = self._transition(record, action, timestamp, actor, reason, operation_id, changes)
+            transition_changes = dict(changes or {})
+            if action == "revise" and "replacements" in transition_changes:
+                if "claim" in transition_changes:
+                    raise KnowledgeError("claim and replacements cannot be supplied together")
+                transition_changes["claim"] = apply_exact_replacements(
+                    record["claim"], transition_changes.pop("replacements"))
+            updated = self._transition(record, action, timestamp, actor, reason, operation_id, transition_changes)
             if action in {"revise", "revalidate", "supersede"}:
                 dependencies = await self._validate_dependencies(self._note_namespace(before), updated)
                 if updated["status"] == "supported":
                     self._bind_dependencies(updated, dependencies)
-            metadata = {self._record_key: updated,
+            metadata = {self._record_key: encode_record(updated, updated["claim"], self.records),
                         self._operations_key: {**operations, operation_id: {"fingerprint": fingerprint, "committed_revision": updated["record_revision"]}}}
             body_changed = updated["claim"] != record["claim"]
             arguments: dict[str, Any] = {"identifier": self._identifier(before), "metadata": metadata}
@@ -453,7 +460,10 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         return result
 
     async def read(self, identifier: str, offset: int = 0, limit: int = 12_000, *,
-                   mode: str = "reuse", request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                   mode: str = "reuse", request_scope: Mapping[str, Any] | None = None,
+                   include_history: bool = True) -> dict[str, Any]:
+        if type(include_history) is not bool:
+            raise ValueError("include_history must be a bool")
         if mode not in {"reuse", "inspect"}:
             raise ValueError("mode must be reuse or inspect")
         if offset < 0 or limit < 1:
@@ -466,7 +476,11 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             value["review_status"] = "unreviewed"
             return value
         if mode == "inspect":
-            return {"identifier": self._identifier(note), "record": record, "mode": "inspect"}
+            result = {"identifier": self._identifier(note), "record": record, "mode": "inspect"}
+            if not include_history:
+                result["record"] = {key: value for key, value in record.items() if key != "events"}
+                result["history_included"] = False
+            return result
         allowed, reason = await self._reuse_allowed(record, request_scope, self._note_namespace(note))
         if not allowed:
             return {"identifier": self._identifier(note), "withheld": True, "reason": reason,

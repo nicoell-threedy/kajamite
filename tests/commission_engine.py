@@ -13,6 +13,7 @@ from kajamite.config import Settings
 from kajamite.engine import KnowledgeEngine
 from kajamite.governance import RecordEngine
 from mcp import ClientSession, StdioServerParameters
+import kajamite
 from mcp.client.stdio import stdio_client
 
 STAMP = '2026-01-01T00:00:00.000000Z'
@@ -30,7 +31,8 @@ def make_record(identifier="service-port", depends_on=None):
 
 async def protocol_call(config, name, arguments):
     host = Path(__file__).with_name('engine_protocol_host.py')
-    params = StdioServerParameters(command=sys.executable, args=[str(host), '--config', str(config)])
+    params = StdioServerParameters(command=sys.executable, args=[str(host), '--config', str(config)],
+                                  env={"PYTHONPATH": str(Path(kajamite.__file__).resolve().parents[1])})
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write, read_timeout_seconds=90) as session:
             await session.initialize()

@@ -1,5 +1,40 @@
 # Validation
 
+## Compact governed-record metadata
+
+On 2026-10-01, 86 source tests ran on Windows Python 3.12: 83 passed and three
+browser checks were skipped.
+Synthetic checks cover complete multi-revision round trips, create/revise/read
+and operation replay, legacy read and upgrade on transition, body tampering,
+malformed journals, and leading/trailing newline preservation. A synthetic
+four-revision record measured 3,992 JSON bytes as a complete record and 2,315
+JSON bytes as `journal-v1`, using the same serialization settings: 1,677 bytes
+(42.0%) less metadata. This is a record-level measurement, not a backend storage
+or retrieval benchmark.
+
+Exact governed passage repair checks cover disjoint replacements, preserved
+history, stale revisions, rejected selections, and operation replay. Compact
+inspection checks preserve every current field, omit only history on request,
+reject invalid history, and leave stored data unchanged.
+
+Native Basic Memory commissioning also passed on Windows against version 0.23.0.
+It covers the governed codec, request scope, restart continuity, source-change
+withholding, revalidation, replay, MCP lifecycle operations, CLI inspection,
+dependency maintenance, and removal. The MCP test subprocesses explicitly select
+the same package directory as their parent. Source-checkout runs set `PYTHONPATH`
+to the checkout's `src` directory.
+
+The 0.7.0 source distribution builds a wheel that installs in a separate virtual
+environment with the hashed dependency lock. All 86 tests run against that
+installed package: 83 pass and three browser checks are skipped. Native
+commissioning also passes against the installed wheel, including concurrent
+writers and the governed lifecycle. Browser acceptance and client deployment
+remain unverified for this release.
+
+One native run returned an operation error during concurrent edits. A complete
+rerun passed. The commissioning helper exposes synthetic tool errors for further
+diagnosis; the intermittent failure's cause is not established.
+
 ## Governed record engine development
 
 On 2026-09-10, all 30 source/protocol tests passed on Windows with Python

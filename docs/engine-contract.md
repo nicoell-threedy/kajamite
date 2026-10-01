@@ -25,10 +25,25 @@ A preference can record a user report without independent verification.
 A proposal remains a proposal. Arbitrary status metadata cannot establish verified support.
 
 Governed claims carry a versioned record in reserved `kajamite_record` metadata.
-The note body presents the current claim.
-The record retains evidence, scope, verification, revisions, and event snapshots.
+The note body presents the current claim. New writes store `journal-v1` metadata:
+`format`, `type`, `schema_version`, the SHA-256 of the normalized current body,
+and ordered events. Each event retains its identity, action, time, actor, reason,
+and status transition. Its `changes` contain the top-level snapshot fields that
+changed since the previous event; the first event contains a complete snapshot.
+A claim equal to the current body uses `{"from_body": true}`. An observation
+statement equal to its snapshot claim uses `{"from_claim": true}`. Other values,
+including source and evidence fields, remain unchanged. Decoding restores complete
+event snapshots and the current projection, then validates the full record.
+Legacy complete-record metadata remains readable and is written as `journal-v1`
+on its next transition. Record results retain the complete record contract.
+Readers before version 0.7 cannot read journal metadata. Upgrade all readers of
+a shared store before enabling writes from this version. Retain a store backup
+before rollout; reverting the package alone does not revert written notes.
+The separate `kajamite_operations` replay metadata keeps its existing format.
 Backend title, type, and permalink metadata remain outside that record.
-The engine compares the current body with the record before reuse.
+The engine normalizes line endings and accepts only the existing optional single
+newline body framing when checking the body hash. It preserves claim whitespace
+and rejects a body that does not match the hash.
 A malformed record or conflicting external edit requires inspection and repair.
 
 Generic note edits cannot replace reserved engine metadata or bypass lifecycle transitions.
@@ -61,6 +76,13 @@ It validates all exact selections against one original body, rejects ambiguity o
 overlap before a write, and copies unselected bytes unchanged. Preview repeats
 the same calculation without mutation; application always rechecks the hash.
 Generic revision cannot bypass governed-record lifecycle rules.
+For a governed record, `knowledge_record_transition` with `action="revise"`
+accepts either a complete `changes.claim` or `changes.replacements`, never both.
+The replacements use the same one-to-100 exact, unique, disjoint selection rules
+against the current complete claim body. The expected record revision, body and
+history checks, operation identity, and cooperating-writer lock still apply.
+Without fresh verification, a revised claim becomes `needs_revalidation`.
+The original transition request determines replay identity.
 
 ## Retrieval
 
@@ -116,6 +138,13 @@ Inaccessible evidence does not alter the stored claim or its history; inspection
 remains available and must not be presented as freshly verified reuse.
 
 ## Body edits through Basic Memory
+
+Governed inspection includes complete history by default. Use
+`read(identifier, mode="inspect", include_history=False)` for current-state
+inspection without event snapshots. The result marks `history_included: false`.
+The engine validates the complete stored history before returning either view.
+Compact inspection is not a portable record export and does not establish reuse
+eligibility. Ordinary reads and governed reuse retain their existing results.
 
 Basic Memory's native text replacement searches the whole Markdown file, including
 frontmatter. The adapter reads the full Markdown and qualifies the replacement with

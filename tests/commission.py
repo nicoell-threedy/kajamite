@@ -14,6 +14,7 @@ import tempfile
 import time
 
 from mcp import ClientSession, StdioServerParameters
+import kajamite
 from mcp.client.stdio import stdio_client
 
 from kajamite.backend import connect, unpack
@@ -22,12 +23,16 @@ from kajamite.engine import KnowledgeEngine
 
 
 async def call(config, name, arguments):
-    params = StdioServerParameters(command=sys.executable, args=["-m", "kajamite", "--config", str(config), "serve"])
+    params = StdioServerParameters(command=sys.executable, args=["-m", "kajamite", "--config", str(config), "serve"],
+                                  env={"PYTHONPATH": str(Path(kajamite.__file__).resolve().parents[1])})
     with open(os.devnull, "w") as err:
         async with stdio_client(params, errlog=err) as (read, write):
             async with ClientSession(read, write, read_timeout_seconds=90) as session:
                 await session.initialize()
-                return unpack(await session.call_tool(name, arguments))
+                result = await session.call_tool(name, arguments)
+                if result.model_dump(mode="json", by_alias=True).get("isError"):
+                    raise AssertionError(f"{name} failed: {result.content!r}")
+                return unpack(result)
 
 
 async def wait_for_indexed_path(backend, query, identifier, attempts=120):

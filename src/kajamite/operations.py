@@ -3,7 +3,7 @@
 OPERATIONS = {
     "knowledge_list": ("list", "Browse notes and child namespaces (ordinary directories). Depth 1 lists immediate children; use pages for large listings."),
     "knowledge_search": ("search", "Full-text search within explicit namespaces. recursive=true includes descendants; root '/' selects the base. Follow next_cursor even when results are empty: scans are bounded and has_more means search is incomplete. No semantic-search claim."),
-    "knowledge_read": ("read", "Read one exact note identifier returned by search or create. Content is paged by character offset; follow next_offset before editing truncated notes."),
+    "knowledge_read": ("read", "Read one exact note identifier returned by search or create. Content is paged by character offset; follow next_offset before editing truncated notes. For governed mode='inspect', include_history=false returns current fields without events; the default includes full validated history."),
     "knowledge_create": ("create", "Write supplied Markdown and optional metadata into an explicit namespace. Creates parent directories as needed and never silently overwrites. Returns the backend-assigned identifier and a verified change receipt; no template or relationship is inserted."),
     "knowledge_edit": ("edit", "Change exactly one current body passage and/or merge metadata on an existing note. Pass both find_text and replacement for a body edit. Returns a verified change receipt. Read back after an uncertain result before retrying."),
     "knowledge_revise": ("revise", "Apply ordered exact replacements to one ordinary note after its complete-body SHA-256 matches expected_content_sha256. preview=true computes the resulting body without mutation; successful writes return a verified grouped change receipt."),
@@ -14,5 +14,5 @@ OPERATIONS = {
     "knowledge_record_maintain": ("record_maintain", "Mark affected dependent records for review in a bounded namespace inventory. Reports partial progress and safe replay."),
     "knowledge_record_remove": ("record_remove", "Remove one exact governed record at an expected revision. Reports backend deletion and bounded index-removal evidence; does not erase backups."),
     "knowledge_record_create": ("record_create", "Create one governed claim with evidence, scope, and revision history. Returns committed revision and receipt."),
-    "knowledge_record_transition": ("record_transition", "Apply an explicit lifecycle transition with expected revision and unique operation identity. Inspect uncertain results before retrying."),
+    "knowledge_record_transition": ("record_transition", "Apply a lifecycle transition with expected_revision and a unique operation_id. For action='revise', changes accepts claim or replacements=[{find_text, replacement}], never both. Exact selections must be unique and disjoint. Changed claims need fresh verification to remain supported. Inspect uncertain results before retrying."),
 }

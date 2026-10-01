@@ -151,6 +151,31 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source_record()["claim"], visible["content"])
         self.assertNotIn("kajamite_record", visible["metadata"])
 
+    async def test_inspect_can_omit_history_without_skipping_validation(self):
+        created = await self.engine.record_create("facts", source_record())
+        identifier = created["identifier"]
+        full = await self.engine.read(identifier, mode="inspect")
+        self.assertEqual(full, await self.engine.read(identifier, mode="inspect", include_history=True))
+        before = copy.deepcopy(self.backend.notes[identifier])
+        compact = await self.engine.read(identifier, mode="inspect", include_history=False)
+        expected_record = {key: value for key, value in full["record"].items() if key != "events"}
+        self.assertEqual(expected_record, compact["record"])
+        self.assertEqual({"identifier": full["identifier"], "record": expected_record,
+                          "mode": "inspect", "history_included": False}, compact)
+        self.assertEqual(before, self.backend.notes[identifier])
+
+        corrupt = copy.deepcopy(before)
+        corrupt["frontmatter"]["kajamite_record"]["events"] = []
+        self.backend.notes[identifier] = corrupt
+        with self.assertRaisesRegex(KnowledgeError, "metadata is invalid"):
+            await self.engine.read(identifier, mode="inspect", include_history=False)
+
+    async def test_read_rejects_non_bool_include_history(self):
+        ordinary = await self.engine.create("Plain", "ordinary", "facts")
+        for value in (None, 0, 1, "false", []):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "include_history must be a bool"):
+                await self.engine.read(ordinary["note"]["identifier"], include_history=value)
+
     async def test_transition_is_atomic_idempotent_and_detects_conflicts(self):
         created = await self.engine.record_create("facts", source_record())
         identifier = created["identifier"]
@@ -177,6 +202,79 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 identifier, "retract", 1, "retract-1", "2026-01-01T00:00:00.000002Z",
                 "reviewer", "Retract",
             )
+
+    async def test_governed_revise_replaces_disjoint_passages_and_preserves_history(self):
+        original = source_record()
+        body = "# Claim\n\nFirst finding.\n\n| Name | Value |\n| ---- | ----- |\n| Ada  | 8     |\n\nLast line.\n"
+        record = self.engine.records.create_record(
+            "selective", body, original["scope"], original["observations"],
+            original["evidence"], original["verification"],
+            timestamp=STAMP, actor="reviewer", reason="Source reviewed", event_id="created-selective",
+        )
+        created = await self.engine.record_create("facts", record)
+        identifier = created["identifier"]
+        changes = {"replacements": [
+            {"find_text": "First finding.", "replacement": "Updated finding."},
+            {"find_text": "| Ada  | 8     |", "replacement": "| Ada  | 9     |"},
+        ]}
+        revised = await self.engine.record_transition(
+            identifier, "revise", 1, "selective-1", "2026-01-01T00:00:00.000001Z",
+            "reviewer", "Source changed", changes,
+        )
+        expected = body.replace("First finding.", "Updated finding.").replace("| Ada  | 8     |", "| Ada  | 9     |")
+        self.assertEqual(expected, revised["record"]["claim"])
+        self.assertEqual(expected, self.backend.notes[identifier]["content"])
+        self.assertEqual("needs_revalidation", revised["record"]["status"])
+        self.assertEqual("needs_revalidation", revised["record"]["verification"]["outcome"])
+        self.assertEqual(body, revised["record"]["events"][0]["snapshot"]["claim"])
+        self.assertEqual(revised["record"], (await self.engine.read(identifier, mode="inspect"))["record"])
+        writes = len([name for name, _ in self.backend.calls if name == "edit_note"])
+        replay = await self.engine.record_transition(
+            identifier, "revise", 1, "selective-1", "2026-01-01T00:00:00.000001Z",
+            "reviewer", "Source changed", changes,
+        )
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(writes, len([name for name, _ in self.backend.calls if name == "edit_note"]))
+        with self.assertRaisesRegex(KnowledgeError, "revision conflict"):
+            await self.engine.record_transition(
+                identifier, "revise", 1, "selective-stale", "2026-01-01T00:00:00.000002Z",
+                "reviewer", "Source changed", changes,
+            )
+
+    async def test_governed_revise_refuses_invalid_selections_before_write(self):
+        created = await self.engine.record_create("facts", source_record())
+        identifier = created["identifier"]
+        invalid = [
+            ("missing", [{"find_text": "absent", "replacement": "other"}]),
+            ("exactly once", [{"find_text": "n", "replacement": "other"}]),
+            ("overlap", [{"find_text": "synthetic governed", "replacement": "first"},
+                         {"find_text": "governed claim", "replacement": "second"}]),
+        ]
+        for index, (message, replacements) in enumerate(invalid):
+            with self.subTest(message=message), self.assertRaisesRegex(KnowledgeError, message):
+                await self.engine.record_transition(
+                    identifier, "revise", 1, f"invalid-{index}", "2026-01-01T00:00:00.000001Z",
+                    "reviewer", "Invalid selection", {"replacements": replacements},
+                )
+        with self.assertRaisesRegex(KnowledgeError, "cannot be supplied together"):
+            await self.engine.record_transition(
+                identifier, "revise", 1, "invalid-mixed", "2026-01-01T00:00:00.000001Z",
+                "reviewer", "Invalid selection", {"claim": "Other", "replacements": invalid[0][1]},
+            )
+        self.assertFalse(any(name == "edit_note" for name, _ in self.backend.calls))
+
+    async def test_governed_revise_accepts_explicit_fresh_verification(self):
+        created = await self.engine.record_create("facts", source_record())
+        verification = {**source_record()["verification"], "record_revision": 2,
+                        "verified_at": "2026-01-01T00:00:00.000001Z"}
+        revised = await self.engine.record_transition(
+            created["identifier"], "revise", 1, "verified-selective",
+            "2026-01-01T00:00:00.000001Z", "reviewer", "Source verified",
+            {"replacements": [{"find_text": "synthetic", "replacement": "verified"}],
+             "verification": verification},
+        )
+        self.assertEqual("supported", revised["record"]["status"])
+        self.assertEqual("A verified governed claim.", revised["record"]["claim"].strip())
 
     async def test_generic_mutation_and_namespace_move_cannot_bypass_lifecycle(self):
         created = await self.engine.record_create("facts", source_record())

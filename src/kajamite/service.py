@@ -17,6 +17,37 @@ class KnowledgeError(RuntimeError):
     """The requested knowledge operation could not be completed safely."""
 
 
+def apply_exact_replacements(body: str, replacements: list[dict[str, str]]) -> str:
+    """Replace disjoint exact passages selected from one original body."""
+    if not isinstance(replacements, list) or not 1 <= len(replacements) <= 100:
+        raise ValueError("replacements must contain between 1 and 100 entries")
+    selections = []
+    for index, item in enumerate(replacements):
+        if not isinstance(item, dict) or set(item) != {"find_text", "replacement"}:
+            raise ValueError("each replacement must contain only find_text and replacement")
+        if not isinstance(item["find_text"], str) or not item["find_text"]:
+            raise ValueError("replacement find_text must be nonempty text")
+        if not isinstance(item["replacement"], str):
+            raise ValueError("replacement value must be text")
+        start = body.find(item["find_text"])
+        if start < 0:
+            raise KnowledgeError("replacement find_text is missing from the current note body")
+        if body.find(item["find_text"], start + 1) != -1:
+            raise KnowledgeError("replacement find_text must occur exactly once in the current note body")
+        selections.append((start, start + len(item["find_text"]), index, item))
+    selections.sort()
+    for previous, current in zip(selections, selections[1:]):
+        if current[0] < previous[1]:
+            raise KnowledgeError("replacement selections overlap in the current note body")
+    parts: list[str] = []
+    position = 0
+    for start, end, _, item in selections:
+        parts.extend((body[position:start], item["replacement"]))
+        position = end
+    parts.append(body[position:])
+    return "".join(parts)
+
+
 class NoteOperations:
     _native_page_size = 50
     _native_page_budget = 5
@@ -282,42 +313,15 @@ class NoteOperations:
         """Apply connected exact replacements against one current note body."""
         if not isinstance(expected_content_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_content_sha256):
             raise ValueError("expected_content_sha256 must be a lowercase SHA-256 digest")
-        if not isinstance(replacements, list) or not 1 <= len(replacements) <= 100:
-            raise ValueError("replacements must contain between 1 and 100 entries")
         if not isinstance(preview, bool):
             raise ValueError("preview must be a boolean")
-        for item in replacements:
-            if not isinstance(item, dict) or set(item) != {"find_text", "replacement"}:
-                raise ValueError("each replacement must contain only find_text and replacement")
-            if not isinstance(item["find_text"], str) or not item["find_text"]:
-                raise ValueError("replacement find_text must be nonempty text")
-            if not isinstance(item["replacement"], str):
-                raise ValueError("replacement value must be text")
         async with self.backend.mutation():
             before = await self._read_full(identifier)
             await self._check_generic_note(before)
             body = before["content"]
             if self._content_sha256(body) != expected_content_sha256:
                 raise KnowledgeError("content revision conflict; read the current complete note before retrying")
-            selections = []
-            for index, item in enumerate(replacements):
-                start = body.find(item["find_text"])
-                if start < 0:
-                    raise KnowledgeError("replacement find_text is missing from the current note body")
-                if body.find(item["find_text"], start + 1) != -1:
-                    raise KnowledgeError("replacement find_text must occur exactly once in the current note body")
-                selections.append((start, start + len(item["find_text"]), index, item))
-            selections.sort()
-            for previous, current in zip(selections, selections[1:]):
-                if current[0] < previous[1]:
-                    raise KnowledgeError("replacement selections overlap in the current note body")
-            parts: list[str] = []
-            position = 0
-            for start, end, _, item in selections:
-                parts.extend((body[position:start], item["replacement"]))
-                position = end
-            parts.append(body[position:])
-            expected = "".join(parts)
+            expected = apply_exact_replacements(body, replacements)
             if preview:
                 return {
                     "preview": True, "identifier": self._identifier(before),
