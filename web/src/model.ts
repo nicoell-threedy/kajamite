@@ -77,6 +77,11 @@ const receiptEntries = (receipt: any) => {
       after: valueText(body.after),
     });
   }
+  for (const entry of result) {
+    if (entry.truncated && entry.before === entry.after)
+      entry.message =
+        "Text changed outside the receipt excerpts. The changed passage is unavailable.";
+  }
   for (const change of receipt.metadata_changes ?? []) {
     if (["record_revision"].includes(change.key)) continue;
     result.push({

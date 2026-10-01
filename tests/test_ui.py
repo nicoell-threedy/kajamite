@@ -17,6 +17,13 @@ class UiTests(unittest.TestCase):
         change = receipt.for_revise(before, before | {'content': 'new'}, [
             {'find_text': f'old passage {i}', 'replacement': f'new passage {i}'} for i in range(9)])
         unchanged = receipt.for_revise(before, before, [{'find_text': 'old', 'replacement': 'old'}])
+        prefix = 'Unchanged context. ' * 200
+        late_before = before | {'content': prefix + 'Retry after 10 seconds.'}
+        late_after = before | {'content': prefix + 'Retry after 30 seconds.'}
+        clipped = receipt.for_edit(late_before, late_after, find_text=late_before['content'],
+                                   replacement=late_after['content'], metadata_keys=set())
+        clipped_group = receipt.for_revise(late_before, late_after, [
+            {'find_text': late_before['content'], 'replacement': late_after['content']}])
         script = r'''
 const frame = document.querySelector('iframe');
 let requests = [], modeReply = 'fullscreen', sizes = 0, initialized;
@@ -62,6 +69,15 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(el('headline').textContent === 'Preview · nothing saved', 'preview');
  await result({knowledge_change:UNCHANGED});
  assert(el('headline').textContent === 'No content changes' && el('counts').textContent.includes('0 changes'), 'no-op');
+ for (const clipped of [CLIPPED, CLIPPED_GROUP]) {
+  await result({knowledge_change:clipped});
+  assert(el('overview').textContent.includes('Text changed outside the receipt excerpts'), 'clipped edit disclosed in summary');
+  assert(el('counts').textContent === '1 note · 1 change', 'clipped edit remains a change');
+  el('toggle').click(); await wait();
+  assert(el('changes').textContent.includes('The changed passage is unavailable.'), 'missing passage disclosed in details');
+  assert(!el('changes').querySelector('mark') && !el('changes').querySelector('.diff'), 'identical previews are not a diff');
+  assert(!el('changes').querySelector('button'), 'unavailable passage has no misleading excerpt expansion');
+ }
  await result({replayed:true,knowledge_change:CHANGE});
  assert(el('headline').textContent === 'Previously completed', 'replay');
  await result({completed:[{knowledge_change:CHANGE},{knowledge_change:CHANGE,replayed:true}],errors:[{record_id:'Failed',error:'Uncertain'}],partial:true});
@@ -86,7 +102,9 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  document.getElementById('outcome').textContent = 'BROWSER_ACCEPTANCE_OK';
 })().catch(error => document.getElementById('outcome').textContent = 'FAILED: '+error.message);
 '''
-        script = 'const CHANGE = ' + json.dumps(change) + '; const UNCHANGED = ' + json.dumps(unchanged) + ';\n' + script
+        script = ('const CHANGE = ' + json.dumps(change) + '; const UNCHANGED = ' + json.dumps(unchanged)
+                  + '; const CLIPPED = ' + json.dumps(clipped) + '; const CLIPPED_GROUP = '
+                  + json.dumps(clipped_group) + ';\n' + script)
         script += '\nframe.srcdoc = ' + json.dumps(html()) + ';'
         self.run_browser(script)
 

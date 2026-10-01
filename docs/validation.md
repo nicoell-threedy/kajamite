@@ -338,3 +338,15 @@ type checks, artifact hashes, and publication guards pass. Light, dark, and narr
 screenshots were inspected. This redesign has source/browser evidence; the prior
 installed-wheel and CI evidence above describes the preceding candidate. Actual
 host rendering and user acceptance remain separate from synthetic validation.
+
+## Clipped receipt fallback
+
+Identical truncated before/after previews display an explicit unavailable-passage
+message in both summary and details. They remain counted as a saved change.
+The view does not highlight identical text or offer excerpt expansion for a
+short fallback message. Raw receipt data remains available.
+
+All 89 source tests passed, including the three Chromium tests. The three browser
+tests passed again after the final disclosure adjustment. Frontend formatting,
+type checks, and reproducible bundle checks passed. Synthetic desktop and 320px
+receipt views were inspected. Actual client-host rendering remains unverified.

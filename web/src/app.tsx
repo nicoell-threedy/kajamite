@@ -30,6 +30,7 @@ const bridge = createBridge(theme);
 // Highlight a single changed span, preserving all unchanged context. Multiple
 // edits inside the span remain verbatim; this is not a generated paraphrase.
 function changedSpan(value: string, other: string) {
+  if (value === other) return value;
   let start = 0,
     end = 0;
   while (
@@ -57,7 +58,9 @@ function Comparison({ item }: { item: Entry }) {
   const before = item.before ?? "None",
     after = item.after ?? "None";
   const long =
-    Math.max(before.length, after.length, item.message?.length ?? 0) > 600;
+    (item.message !== undefined
+      ? item.message.length
+      : Math.max(before.length, after.length)) > 600;
   let common = 0;
   while (
     common < Math.min(before.length, after.length) &&
