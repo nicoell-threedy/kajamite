@@ -350,3 +350,17 @@ All 89 source tests passed, including the three Chromium tests. The three browse
 tests passed again after the final disclosure adjustment. Frontend formatting,
 type checks, and reproducible bundle checks passed. Synthetic desktop and 320px
 receipt views were inspected. Actual client-host rendering remains unverified.
+
+## Saved record state
+
+Successful single-record receipts show disputed, needs-revalidation, unverifiable,
+superseded, and retracted states in the primary view. The label describes the saved
+record, not current source freshness. Failure warnings take precedence; replays
+do not announce a new saved state. Plain notes and supported records gain no
+attention message.
+
+All 89 tests passed, including Chromium checks for each state, failure precedence,
+and replay handling. Frontend formatting, types, and reproducible bundle checks
+passed. A synthetic native receipt was inspected at desktop and 320px widths.
+Maintenance batches and legacy receipts without a top-level record remain outside
+this presentation change. Actual client-host rendering remains unverified.

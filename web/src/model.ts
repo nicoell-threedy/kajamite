@@ -263,6 +263,20 @@ export function describe(output: any = {}, isError = false): View {
       !output?.replayed)
   )
     view.attention = view.status;
+  if (
+    receipt &&
+    !output.replayed &&
+    !output.preview &&
+    !view.attention &&
+    [
+      "disputed",
+      "needs_revalidation",
+      "unverifiable",
+      "superseded",
+      "retracted",
+    ].includes(output.record?.status)
+  )
+    view.attention = `Saved record state: ${fieldLabel(output.record.status)}.`;
   if (receipt && !output.replayed) {
     if (receipt.operation === "create") view.summary = "New note saved.";
     else if (receipt.operation === "remove_note")

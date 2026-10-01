@@ -51,6 +51,12 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(doc().body.getBoundingClientRect().height < 240, 'compact initial height');
  assert(el('overview').textContent.includes('old passage 0') && el('overview').textContent.includes('new passage 0'), 'real edits visible without interaction');
  assert(el('counts').textContent === '1 note · 9 changes', 'notes and passages are distinct');
+ for (const state of ['disputed','needs_revalidation','unverifiable','superseded','retracted']) {
+  await result({knowledge_change:CHANGE,record:{status:state}});
+  assert(!el('status').hidden && el('status').textContent.includes(state.replaceAll('_',' ').replace(/^./, c=>c.toUpperCase())), 'saved lifecycle state visible: '+state);
+ }
+ await result({knowledge_change:CHANGE,record:{status:'supported'}});
+ assert(el('status').hidden, 'supported state does not require attention');
  el('toggle').click(); await wait();
  assert(requests[0] === 'fullscreen' && !el('review').hidden, 'advertised fullscreen');
  assert(el('changes').children.length === 3, 'bounded first disclosure');
@@ -78,14 +84,17 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
   assert(!el('changes').querySelector('mark') && !el('changes').querySelector('.diff'), 'identical previews are not a diff');
   assert(!el('changes').querySelector('button'), 'unavailable passage has no misleading excerpt expansion');
  }
- await result({replayed:true,knowledge_change:CHANGE});
+ await result({replayed:true,knowledge_change:CHANGE,record:{status:'needs_revalidation'}});
  assert(el('headline').textContent === 'Previously completed', 'replay');
+ assert(!el('status').textContent.includes('Saved record state'), 'replay does not imply a new saved state');
  await result({completed:[{knowledge_change:CHANGE},{knowledge_change:CHANGE,replayed:true}],errors:[{record_id:'Failed',error:'Uncertain'}],partial:true});
  assert(el('headline').textContent.includes('partially') && el('counts').textContent.startsWith('1 note changed'), 'partial maintenance excludes replay');
  await result({completed:[],errors:[],partial:false});
  assert(el('headline').textContent === 'No new changes', 'empty maintenance');
  await result({content:[{type:'text',text:'uncertain'}]},true);
  assert(el('headline').textContent === 'Operation failed' && el('status').textContent.includes('may have committed'), 'failure');
+ await result({knowledge_change:CHANGE,record:{status:'needs_revalidation'},content:[{type:'text',text:'uncertain'}]},true);
+ assert(el('status').textContent.includes('may have committed') && !el('status').textContent.includes('Saved record state'), 'failure takes precedence over record state');
  await result({}); assert(el('headline').textContent === 'No change receipt returned', 'missing receipt');
  const malicious = JSON.parse(JSON.stringify(CHANGE));
  malicious.after.identifier = '<img src=x onerror="window.pwned=true">';
