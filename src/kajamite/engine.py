@@ -364,6 +364,15 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if action == "evidence_health":
                 return self._evidence_health(record, timestamp, actor, reason, changes)["record"]
         except (RecordError, KeyError, TypeError) as error:
+            detail = str(error)
+            if isinstance(error, RecordError) and detail in {
+                "event timestamp must use canonical UTC microseconds",
+                "verification.verified_at must use canonical UTC microseconds",
+                "verification.verified_at must be newer than the prior semantic verification",
+                "verification.verified_at cannot be later than the event timestamp",
+                f"verification.record_revision must be {record['record_revision'] + 1}",
+            }:
+                raise KnowledgeError(detail) from error
             raise KnowledgeError("record transition is invalid") from error
         raise KnowledgeError("record transition action is invalid")
 

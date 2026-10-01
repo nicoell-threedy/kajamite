@@ -5,13 +5,14 @@ import hashlib
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from kajamite.engine import KnowledgeEngine
 from kajamite.errors import BackendError, MutationUncertain
-from kajamite.governance import RecordEngine
+from kajamite.governance import RecordEngine, RecordError
 from kajamite.service import KnowledgeError
 from test_service import FakeBackend
 
@@ -202,6 +203,27 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 identifier, "retract", 1, "retract-1", "2026-01-01T00:00:00.000002Z",
                 "reviewer", "Retract",
             )
+
+    async def test_transition_explains_safe_verification_errors_without_mutation(self):
+        created = await self.engine.record_create("facts", source_record())
+        identifier = created["identifier"]
+        verification = {**source_record()["verification"], "record_revision": 2,
+                        "verified_at": "2026-01-01T00:00:01.000000Z"}
+        cases = [
+            ({**verification, "verified_at": "2026-01-01T00:00:01.000Z"}, "verification.verified_at must use canonical UTC microseconds"),
+            ({**verification, "record_revision": 1}, "verification.record_revision must be 2"),
+        ]
+        before = copy.deepcopy(self.backend.notes[identifier])
+        for invalid, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(KnowledgeError, message):
+                await self.engine.record_transition(identifier, "revise", 1, "invalid",
+                    "2026-01-01T00:00:01.000000Z", "reviewer", "Clarify",
+                    {"claim": "Clarified claim.", "verification": invalid})
+            self.assertEqual(before, self.backend.notes[identifier])
+        with patch.object(self.engine.records, "revise", side_effect=RecordError("private diagnostic")):
+            with self.assertRaisesRegex(KnowledgeError, "^record transition is invalid$"):
+                await self.engine.record_transition(identifier, "revise", 1, "opaque",
+                    "2026-01-01T00:00:01.000000Z", "reviewer", "Clarify", {"claim": "Clarified claim."})
 
     async def test_governed_revise_replaces_disjoint_passages_and_preserves_history(self):
         original = source_record()

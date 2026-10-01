@@ -195,6 +195,11 @@ For a focused governed revision, use action="revise" and changes.replacements wi
 objects containing find_text and replacement. Do not also supply changes.claim.
 Selections apply to the original body and must be unique and disjoint. Unselected
 text remains unchanged. Fresh verification is required for supported status.
+Bind verification.record_revision to expected_revision + 1. Use six fractional
+digits and `Z` for event and verification times, such as
+`2026-01-01T12:00:00.000001Z`. Verification must be newer than the previous
+verification and no later than the event. Correct a reported field error before
+retrying; removing verification makes a changed claim need revalidation.
 If a transition result is uncertain, inspect current state before a retry.
 Generic note edits and moves cannot bypass the record lifecycle.
 

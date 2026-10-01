@@ -2,7 +2,7 @@
 
 ## Compact governed-record metadata
 
-On 2026-10-01, 86 source tests ran on Windows Python 3.12: 83 passed and three
+On 2026-10-01, 87 source tests ran on Windows Python 3.12: 84 passed and three
 browser checks were skipped.
 Synthetic checks cover complete multi-revision round trips, create/revise/read
 and operation replay, legacy read and upgrade on transition, body tampering,
@@ -26,13 +26,19 @@ to the checkout's `src` directory.
 
 The 0.7.0 source distribution builds a wheel that installs in a separate virtual
 environment with the hashed dependency lock. In an isolated fixture with the
-wheel installed into `src` and no checkout package source, 86 tests run: 82 pass,
+wheel installed into `src` and no checkout package source, 87 tests run: 83 pass,
 three browser checks are skipped, and the source-history publication check is
 skipped because the fixture has no Git history. This layout prevents test import
 paths from selecting checkout code. Native
 commissioning also passes against the installed wheel, including concurrent
 writers and the governed lifecycle. Browser acceptance and client deployment
 remain unverified for this release.
+
+Known verification timestamp and revision errors identify the invalid field.
+Synthetic checks preserve the stored record on rejection and keep other
+diagnostics opaque. A focused native wheel check confirms the timestamp message
+and unchanged record. The complete native commissioning result above precedes
+this diagnostic-only change.
 
 One native run returned an operation error during concurrent edits. A complete
 rerun passed. The commissioning helper exposes synthetic tool errors for further
