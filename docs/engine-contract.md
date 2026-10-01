@@ -81,7 +81,13 @@ accepts either a complete `changes.claim` or `changes.replacements`, never both.
 For a changed body supplied through replacements, the receipt preserves those
 passages in the existing grouped-replacement shape. The backend write remains
 atomic, and the receipt retains governed metadata changes and readback identity.
-Supplying a complete claim retains the whole-body receipt behavior.
+Supplying a complete claim produces grouped changed-line passages in the
+existing receipt shape. Each passage includes one preceding line of context
+when available. Long changed lines omit shared text around the edit while
+retaining the full passage length and hash and marking the preview truncated.
+For claims over 500 lines on either side, the receipt uses the bounded
+whole-body preview. Broad replacements can still truncate at 2,000 characters.
+This passage extraction applies only to governed complete-claim revisions.
 The replacements use the same one-to-100 exact, unique, disjoint selection rules
 against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.

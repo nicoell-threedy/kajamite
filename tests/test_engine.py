@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from kajamite.engine import KnowledgeEngine
+from kajamite import receipt
 from kajamite.errors import BackendError, MutationUncertain
 from kajamite.governance import RecordEngine, RecordError
 from kajamite.service import KnowledgeError
@@ -271,6 +272,68 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 identifier, "revise", 1, "selective-stale", "2026-01-01T00:00:00.000002Z",
                 "reviewer", "Source changed", changes,
             )
+
+    async def test_complete_claim_receipt_shows_distant_changes(self):
+        original = source_record()
+        body = "# Claim\n" + "Stable introduction.\n" * 120 + "First finding.\n" + "Stable context.\n" * 120 + "Second finding.\n"
+        record = self.engine.records.create_record(
+            "complete", body, original["scope"], original["observations"],
+            original["evidence"], original["verification"],
+            timestamp=STAMP, actor="reviewer", reason="Source reviewed", event_id="created-complete",
+        )
+        created = await self.engine.record_create("facts", record)
+        identifier = created["identifier"]
+        updated = body.replace("First finding.", "Updated first finding.").replace("Second finding.", "Updated second finding.")
+        changes = {"claim": updated}
+        revised = await self.engine.record_transition(
+            identifier, "revise", 1, "complete-1", "2026-01-01T00:00:00.000001Z",
+            "reviewer", "Source changed", changes,
+        )
+        change = revised["knowledge_change"]
+        self.assertEqual("edit", change["operation"])
+        self.assertEqual("grouped_exact_replacement", change["body_change"]["kind"])
+        passages = change["body_change"]["replacements"]
+        self.assertEqual(2, len(passages))
+        self.assertIn("Updated first finding.", passages[0]["after"]["preview"])
+        self.assertIn("Updated second finding.", passages[1]["after"]["preview"])
+        self.assertEqual(2, str(change["body_change"]).count("Stable introduction."))
+        self.assertEqual({"kajamite_record", "kajamite_operations"}, {item["key"] for item in change["metadata_changes"]})
+        self.assertEqual(hashlib.sha256(updated.encode()).hexdigest(), change["after"]["content_sha256"])
+        self.assertIn("Updated second finding.", revised["knowledge_change_text"])
+        self.assertEqual(updated, self.backend.notes[identifier]["content"])
+        replay = await self.engine.record_transition(
+            identifier, "revise", 1, "complete-1", "2026-01-01T00:00:00.000001Z",
+            "reviewer", "Source changed", changes,
+        )
+        self.assertTrue(replay["replayed"])
+
+    async def test_complete_claim_receipt_handles_long_lines_edits_and_noop(self):
+        old = "Heading\n" + "a" * 2_500 + " old 🙂 " + "z" * 120 + "\nTail\n"
+        new = old.replace(" old 🙂 ", " new 🚀 ")
+        passage = receipt.changed_claim_passages(old, new)["replacements"][0]
+        self.assertIn("old 🙂", passage["before"]["preview"])
+        self.assertIn("new 🚀", passage["after"]["preview"])
+        self.assertNotIn("a" * 2_000, passage["after"]["preview"])
+        self.assertTrue(passage["before"]["truncated"])
+        self.assertEqual(hashlib.sha256(("Heading\n" + "a" * 2_500 + " old 🙂 " + "z" * 120 + "\n").encode()).hexdigest(), passage["before"]["sha256"])
+
+        inserted = receipt.changed_claim_passages("One\nThree\n", "One\nTwo\nThree\n")
+        deleted = receipt.changed_claim_passages("One\nTwo\nThree\n", "One\nThree\n")
+        self.assertIn("Two\n", inserted["replacements"][0]["after"]["preview"])
+        self.assertIn("Two\n", deleted["replacements"][0]["before"]["preview"])
+        broad = receipt.changed_claim_passages("a" * 3_000, "b" * 3_000)
+        self.assertTrue(broad["replacements"][0]["before"]["truncated"])
+        self.assertEqual(2_000, len(broad["replacements"][0]["after"]["preview"]))
+        long_document = receipt.changed_claim_passages("alpha line\n" * 501, "bravo line\n" * 501)
+        self.assertEqual("exact_replacement", long_document["kind"])
+        self.assertTrue(long_document["before"]["truncated"])
+
+        created = await self.engine.record_create("facts", source_record())
+        unchanged = await self.engine.record_transition(
+            created["identifier"], "revise", 1, "same-claim", "2026-01-01T00:00:00.000001Z",
+            "reviewer", "Verification refreshed", {"claim": source_record()["claim"]},
+        )
+        self.assertIsNone(unchanged["knowledge_change"]["body_change"])
 
     async def test_governed_revise_refuses_invalid_selections_before_write(self):
         created = await self.engine.record_create("facts", source_record())

@@ -336,8 +336,12 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                                       find_text=record["claim"] if body_changed else None,
                                       replacement=updated["claim"] if body_changed else None,
                                       metadata_keys={self._record_key, self._operations_key})
-            if body_changed and action == "revise" and "replacements" in (changes or {}):
-                change["body_change"] = receipt.for_revise(before, after, changes["replacements"])["body_change"]
+            if body_changed and action == "revise":
+                change["body_change"] = (
+                    receipt.for_revise(before, after, changes["replacements"])["body_change"]
+                    if "replacements" in (changes or {})
+                    else receipt.changed_claim_passages(record["claim"], updated["claim"])
+                )
             return self._record_result(result, after, persisted, change, replayed=False)
 
     def _transition(self, record: Mapping[str, Any], action: str, timestamp: str, actor: str,

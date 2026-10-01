@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from difflib import SequenceMatcher
 from typing import Any
 
 
 SCHEMA_VERSION = 1
 VALUE_PREVIEW_CHARS = 2_000
+CLAIM_DIFF_MAX_LINES = 500
+CLAIM_CONTEXT_CHARS = 80
 COVERAGE = "kajamite_operation"
 COVERAGE_NOTICE = (
     "This receipt covers this Kajamite operation only; it does not exclude "
@@ -148,6 +151,44 @@ def for_revise(
         affected_notes_exact=True,
         verification="readback_verified",
     )
+
+
+def changed_claim_passages(before: str, after: str) -> dict[str, Any]:
+    """Show changed line blocks from a complete claim within a bounded line diff."""
+    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
+    if max(len(old_lines), len(new_lines)) > CLAIM_DIFF_MAX_LINES:
+        # ponytail: bounded quadratic line matching; use a larger-document diff only if passage previews need it.
+        return {"kind": "exact_replacement", "before": _value(before), "after": _value(after)}
+
+    passages = []
+    for tag, old_start, old_end, new_start, new_end in SequenceMatcher(
+        None, old_lines, new_lines, autojunk=False
+    ).get_opcodes():
+        if tag == "equal":
+            continue
+        context = 1 if old_start and new_start else 0
+        old = "".join(old_lines[old_start - context:old_end])
+        new = "".join(new_lines[new_start - context:new_end])
+        prefix = 0
+        while prefix < min(len(old), len(new)) and old[prefix] == new[prefix]:
+            prefix += 1
+        suffix = 0
+        while suffix < min(len(old), len(new)) - prefix and old[-suffix - 1] == new[-suffix - 1]:
+            suffix += 1
+        left = max(0, prefix - CLAIM_CONTEXT_CHARS)
+
+        def evidence(value: str) -> dict[str, Any]:
+            result = _value(value)
+            right = min(len(value), len(value) - suffix + CLAIM_CONTEXT_CHARS)
+            preview = ("…" if left else "") + value[left:right] + ("…" if right < len(value) else "")
+            if len(preview) > VALUE_PREVIEW_CHARS:
+                preview = preview[:VALUE_PREVIEW_CHARS - 1] + "…"
+            result["preview"] = preview
+            result["truncated"] = left > 0 or right < len(value) or len(preview) < len(value)
+            return result
+
+        passages.append({"before": evidence(old), "after": evidence(new)})
+    return {"kind": "grouped_exact_replacement", "replacements": passages}
 
 
 def for_note_move(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:

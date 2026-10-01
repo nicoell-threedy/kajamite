@@ -1,14 +1,23 @@
 # Validation
 
-## Selected governed revision receipts
+## Governed revision receipts
 
-The selected-replacement receipt path passes the 87-test source suite: 84 pass
-and three browser tests skip. An isolated native MCP revision changes two small
-passages in a 6,362-character topic, preserves its original history, and reads
-back the exact updated record. Both old/new passage pairs remain in the receipt
-and are visible in the packaged frontend's collapsed view in a synthetic host.
-Whole-claim clipping, internal metadata presentation, and desktop-host rendering
-are outside this change. No frontend bundle changes are required.
+On 2026-10-01, the 89-test source suite passed: 86 passed and three browser
+checks skipped. Synthetic checks cover complete-claim edits after 2,000
+characters, distant edits with unchanged middle lines, a Unicode edit near the
+end of a long line, insertion, deletion, broad-replacement truncation, the
+500-line fallback, unchanged claims, and operation replay. Full passage hashes,
+record readback, and metadata changes remain in the receipt. An isolated native
+MCP complete-claim revision also confirms two distant changes, exact readback,
+retained history, and operation replay. Both changes are visible in collapsed
+and expanded views of the packaged frontend in a synthetic host. This does not
+establish desktop-host acceptance or correct the remaining metadata layout.
+
+An isolated native MCP selected-replacement revision changes two small passages
+in a 6,362-character topic, preserves its original history, and reads back the
+exact updated record. Both old/new passage pairs remain in the receipt and are
+visible in the packaged frontend's collapsed view in a synthetic host. Desktop
+host rendering remains unverified. No frontend bundle changes are required.
 
 ## Compact governed-record metadata
 
