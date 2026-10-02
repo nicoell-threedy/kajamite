@@ -1,6 +1,7 @@
 export type Entry = {
   title: string;
   note?: string;
+  noteTitle?: string;
   kind?: "text" | "field" | "location" | "message";
   truncated?: boolean;
   before?: string;
@@ -115,7 +116,10 @@ const receiptEntries = (receipt: any) => {
       before: receipt.before?.identifier,
       after: receipt.after?.identifier,
     });
-  return result;
+  return result.map((entry) => ({
+    ...entry,
+    noteTitle: receipt.after?.title ?? receipt.before?.title,
+  }));
 };
 const isChanged = (receipt: any) =>
   receipt.operation.startsWith("move") ||
@@ -263,6 +267,7 @@ export function describe(output: any = {}, isError = false): View {
   view.entries = entries.map((item) => ({
     ...item,
     title: text(item.title),
+    noteTitle: text(item.noteTitle),
     before: text(item.before),
     after: text(item.after),
     message: text(item.message),

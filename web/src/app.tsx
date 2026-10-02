@@ -192,7 +192,7 @@ function SummaryEntry({ item, showNote }: { item: Entry; showNote: boolean }) {
     <li className="summary-line">
       {showNote && item.note && (
         <span className="font-medium">
-          {noteName(item.note)}
+          {item.noteTitle || noteName(item.note)}
           <span className="text-muted-foreground"> · </span>
         </span>
       )}
@@ -371,9 +371,12 @@ function App() {
                   >
                     <Separator />
                     {batch && item.note !== view.entries[index - 1]?.note && (
-                      <h2 className="break-anywhere font-medium">
-                        {item.note}
-                      </h2>
+                      <div>
+                        <h2 className="break-anywhere font-medium">
+                          {item.noteTitle || noteName(item.note ?? "")}
+                        </h2>
+                        <p className="note-path break-anywhere">{item.note}</p>
+                      </div>
                     )}
                     <h3 className="text-xs font-medium text-muted-foreground">
                       {item.title}

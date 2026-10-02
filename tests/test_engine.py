@@ -48,6 +48,29 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_governed_heading_is_a_display_title_without_changing_identity(self):
+        original = source_record()
+        record = self.engine.records.create_record('stable-id', '# Resource retry policy\n\n' + original['claim'],
+            original['scope'], original['observations'], original['evidence'], original['verification'],
+            timestamp=STAMP, actor='reviewer', reason='Source reviewed', event_id='created')
+        created = await self.engine.record_create('facts', record)
+        identifier = created['identifier']
+        self.assertEqual('facts/stable-id.md', identifier)
+        self.assertEqual('Resource retry policy', created['knowledge_change']['after']['title'])
+        self.engine.evidence_checker = lambda record, scope: True
+        snapshot = copy.deepcopy(self.backend.notes)
+        self.assertEqual('Resource retry policy', (await self.engine.read(identifier, mode='inspect'))['title'])
+        self.assertEqual('Resource retry policy', (await self.engine.read(identifier, request_scope=record['scope']))['title'])
+        self.assertEqual('Resource retry policy', (await self.engine.search(['facts'], 'Resource', mode='inspect'))['results'][0]['title'])
+        self.assertEqual('Resource retry policy', (await self.engine.list('facts', mode='inspect'))['nodes'][0]['title'])
+        self.assertEqual('Resource retry policy', (await self.engine.context(identifiers=[identifier], mode='inspect'))['notes'][0]['title'])
+        self.assertEqual(snapshot, self.backend.notes)
+        self.assertEqual('stable-id', self.backend.notes[identifier]['title'])
+        self.assertEqual(record, (await self.engine.read(identifier, mode='inspect'))['record'])
+        ordinary = {'title': 'Explicit note title', 'content': '# Different heading'}
+        self.assertEqual('Explicit note title', receipt.display_title(ordinary))
+        self.assertEqual('Explicit note title', receipt.display_title(ordinary | {'content': '    # Code', 'frontmatter': {'kajamite_record': {}}}))
+
     async def test_inspection_context_budgets_prose_and_keeps_history_in_explicit_reads(self):
         created = await self.engine.record_create("facts", source_record())
         changed = await self.engine.record_transition(created["identifier"], "revise", 1, "revise",
@@ -228,7 +251,7 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         compact = await self.engine.read(identifier, mode="inspect", include_history=False)
         expected_record = {key: value for key, value in full["record"].items() if key != "events"}
         self.assertEqual(expected_record, compact["record"])
-        self.assertEqual({"identifier": full["identifier"], "record": expected_record,
+        self.assertEqual({"identifier": full["identifier"], "title": full["title"], "record": expected_record,
                           "mode": "inspect", "history_included": False}, compact)
         self.assertEqual(before, self.backend.notes[identifier])
 

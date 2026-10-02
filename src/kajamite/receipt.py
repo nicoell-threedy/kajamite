@@ -48,9 +48,20 @@ def _identity(note: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(content, str):
         raise ValueError("receipt note has no complete content")
     result = {"identifier": _identifier(note), "content_sha256": _sha256(content)}
-    if isinstance(note.get("title"), str) and note["title"].strip():
-        result["title"] = note["title"]
+    title = display_title(note)
+    if title:
+        result["title"] = title
     return result
+
+
+def display_title(note: dict[str, Any]) -> str:
+    """Use a governed topic's leading H1 without changing its stored address."""
+    if "kajamite_record" in _metadata(note):
+        heading = re.match(r"# ([^\r\n]+)", str(note.get("content", "")).lstrip("\r\n"))
+        if heading and heading[1].strip():
+            return heading[1].strip()
+    title = note.get("title")
+    return title if isinstance(title, str) else ""
 
 
 def _comparison(before: dict[str, Any] | None, after: dict[str, Any] | None) -> dict[str, Any]:

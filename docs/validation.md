@@ -2,15 +2,17 @@
 
 ## Reflow and readable receipt subjects
 
-All 96 source checks pass, including three Chromium tests, and frontend format,
+All 97 source checks pass, including three Chromium tests, and frontend format,
 type, and generated-bundle checks pass. Native governed-engine commissioning
 verifies retained phrases across a line break with a changed value, preserved
 history, and stored titles in receipts. Synthetic checks cover Unicode offsets,
 the token ceiling, malformed range fallback, and inert source text.
 Rendered desktop and narrow test-host views preserve unchanged wording while
 highlighting the edited number and added list structure. Stable paths remain
-visible below stored titles. This does not add governed-title authoring or
-establish installed desktop-host acceptance.
+visible below display titles. Governed topics derive the label from a leading
+level-one heading in the current body; read, search, list, context, and receipt
+checks preserve the original identifier and stored bytes. Ordinary notes retain
+their explicit titles. This does not establish installed desktop-host acceptance.
 
 ## Required verification fields
 

@@ -108,6 +108,11 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(!marks.includes('shared resource') && !marks.includes('café'), 'reflow retains unhighlighted phrases');
  assert(doc().querySelector('.diff-line p').textContent === REFLOW.body_change.before.preview, 'Unicode before text preserved');
  assert(doc().querySelector('.diff-after p').textContent === REFLOW.body_change.after.preview, 'Unicode after text preserved');
+ await result({completed:[{knowledge_change:REFLOW}]}); await wait();
+ assert(el('overview').textContent.includes('Resource retry policy'), 'batch readable title');
+ el('toggle').click(); await wait();
+ assert(doc().querySelector('#changes h2').textContent === 'Resource retry policy', 'expanded batch readable title');
+ assert(el('changes').textContent.includes('Guides/stable-policy-id.md') || el('changes').textContent.includes('Notes/stable-id.md'), 'batch stable path');
  const invalidRanges = JSON.parse(JSON.stringify(REFLOW));
  invalidRanges.body_change.after.changed_ranges = [[-1, 999999]];
  await result({knowledge_change:invalidRanges}); el('toggle').click(); await wait();

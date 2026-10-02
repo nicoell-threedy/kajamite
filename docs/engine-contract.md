@@ -94,8 +94,12 @@ exclusive end. Word, punctuation, and whitespace comparison preserves retained
 phrases across reflow without copying the prose again. Matching is limited to
 1,000 tokens per side; larger comparisons omit the ranges and use broad-span
 highlighting. The ranges describe preview text, not omitted note content.
-Receipt identities include the stored note title when available. Titles are
-display labels; identifiers remain the addresses for subsequent operations.
+Receipt identities include a display title when available. Governed topics use
+a leading level-one Markdown heading from their current body; topics without
+that heading retain the stored title. Reads, searches, lists, and context bundles
+use the same display label. Ordinary notes keep their explicit backend title.
+Display titles do not rename files, change record IDs, or become aliases for
+subsequent operations. No additional title metadata is persisted.
 The replacements use the same one-to-100 exact, unique, disjoint selection rules
 against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.

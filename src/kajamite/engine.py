@@ -518,7 +518,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             value["review_status"] = "unreviewed"
             return value
         if mode == "inspect":
-            result = {"identifier": self._identifier(note), "record": record, "mode": "inspect"}
+            result = {"identifier": self._identifier(note), "title": receipt.display_title(note), "record": record, "mode": "inspect"}
             if not include_history:
                 result["record"] = {key: value for key, value in record.items() if key != "events"}
                 result["history_included"] = False
@@ -533,7 +533,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                          offset: int, limit: int) -> dict[str, Any]:
         content = record["claim"]
         end = min(len(content), offset + limit)
-        return {"identifier": self._identifier(dict(note)), "title": note.get("title", ""),
+        return {"identifier": self._identifier(dict(note)), "title": receipt.display_title(dict(note)),
                 "permalink": note.get("permalink"), "file_path": note.get("file_path"),
                 "content": content[offset:end], "metadata": self._metadata_without_engine(note),
                 "offset": offset, "next_offset": end if end < len(content) else None,
@@ -567,7 +567,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 allowed, reason = await self._reuse_allowed(record, request_scope, self._note_namespace(note))
                 if mode == "inspect" or allowed:
                     kept.append({"identifier": identifier, "file_path": row["file_path"],
-                                 "title": row.get("title", ""), "governed": True,
+                                 "title": receipt.display_title(note), "governed": True,
                                  "record_status": record["status"], "record_revision": record["record_revision"],
                                  "snippet": record["claim"][:1000] if allowed and mode == "reuse" else ""})
                 else:
@@ -615,6 +615,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     return node
                 allowed, reason = await self._reuse_allowed(record, request_scope, self._note_namespace(note))
                 if mode == "inspect" or allowed:
+                    node["title"] = receipt.display_title(note)
                     return node
                 else:
                     excluded.append({"identifier": identifier, "reason": reason})
@@ -680,7 +681,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 record = public["record"]
                 available = max_chars - used
                 end = min(len(record["claim"]), available)
-                public = {"identifier": public["identifier"], "content": record["claim"][:end], "offset": 0,
+                public = {"identifier": public["identifier"], "title": public["title"], "content": record["claim"][:end], "offset": 0,
                           "next_offset": None,
                           "truncated": end < len(record["claim"]),
                           "record_status": record["status"], "record_revision": record["record_revision"],
