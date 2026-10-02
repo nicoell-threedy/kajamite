@@ -61,6 +61,9 @@ async def run(config):
         assert revised['committed_revision'] == 2
         assert revised['record']['claim'] == 'A corrected synthetic claim.'
         assert revised['record']['events'][0] == body_record['record']['events'][0]
+        fields = {field['key']: field for field in revised['knowledge_change']['record_changes']}
+        assert fields['status']['after'] == 'needs_revalidation'
+        assert 'events' not in fields and 'claim' not in fields
     # A new backend session reads the durable record, rather than process-local state.
     async with connect(settings) as backend:
         engine = KnowledgeEngine(backend, evidence_checker=lambda record, scope: True)
@@ -78,6 +81,8 @@ async def run(config):
             {'verification': verified})
         assert restored['committed_revision'] == 3
         assert restored['knowledge_change']['readback_verified']
+        assert any(field['key'] == 'status' and field['after'] == 'supported'
+                   for field in restored['knowledge_change']['record_changes'])
         assert (await engine.read(identifier, request_scope=SCOPE))['content'] == make_record()['claim']
         replayed = await engine.record_transition(identifier, 'revalidate', 2, 'review-event',
             '2026-01-01T00:00:02.000000Z', 'reviewer', 'Source reviewed; claim remains supported',

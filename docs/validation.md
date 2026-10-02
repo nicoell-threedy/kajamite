@@ -378,3 +378,24 @@ browser tests passed again after the singular-count wording adjustment. Frontend
 checks passed. A synthetic governed receipt showed both text edits and its saved
 state while its review count decreased from four to three. Full record metadata
 projection and actual client-host acceptance remain open.
+
+## Semantic record changes
+
+Governed receipts project meaningful fields from validated records without decoding
+stored journals in the frontend. The primary review separates text edits, status,
+scope, evidence-change counts, and verification fields. History and replay objects
+remain in raw receipt disclosure. Legacy receipts retain their full metadata row.
+This changes review presentation, not stored bytes or source-verification policy.
+
+The 90-test suite passed, including three Chromium tests. Coverage includes scope
+addition/removal, stable-ID evidence corrections, create/transition receipts, and
+legacy fallback. Frontend formatting, types, and reproducible bundle checks passed.
+Native engine commissioning passed persistence, reconnect, revalidation, replay,
+MCP/CLI routing, maintenance, and removal checks. A separate synthetic native receipt
+showed a text correction, removed scope constraint, evidence correction, and a
+scope-only revision with exact readback after reconnect. Its expanded primary view
+had matching 320px client and scroll widths. Actual client-host acceptance remains
+unverified.
+The complete native commissioning entrypoint also passed note operations,
+capability checks, and governed engine commissioning. The final three browser
+tests passed with maintenance projection coverage enabled.

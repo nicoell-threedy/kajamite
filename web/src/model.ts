@@ -82,15 +82,22 @@ const receiptEntries = (receipt: any) => {
       entry.message =
         "Text changed outside the receipt excerpts. The changed passage is unavailable.";
   }
-  for (const change of receipt.metadata_changes ?? []) {
+  const projected = Array.isArray(receipt.record_changes);
+  for (const change of [
+    ...(receipt.metadata_changes ?? []).filter(
+      (change: any) => !projected || change.key !== "kajamite_record",
+    ),
+    ...(projected ? receipt.record_changes : []),
+  ]) {
     if (["record_revision", "kajamite_operations"].includes(change.key))
       continue;
     result.push({
-      title: fieldLabel(change.key),
+      title: change.key.split(".").map(fieldLabel).join(" · "),
       note: title,
       kind: "field",
       before: change.before_present === false ? "Absent" : text(change.before),
       after: change.after_present === false ? "Absent" : text(change.after),
+      message: change.message,
     });
   }
   if (receipt.operation.startsWith("move"))

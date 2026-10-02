@@ -201,10 +201,17 @@ const load = async index => {
                                   find_text=None, replacement=None, metadata_keys={'status', 'record_revision', 'kajamite_operations'})
         tracking = receipt.for_edit(before, before | {'metadata': before['metadata'] | {'kajamite_operations': operations}},
                                     find_text=None, replacement=None, metadata_keys={'kajamite_operations'})
+        old_record = {'scope': {'product': 'Alpha'}, 'status': 'supported'}
+        new_record = {'scope': {'product': 'Beta'}, 'status': 'needs_revalidation'}
+        semantic = receipt.for_edit(before | {'metadata': {'kajamite_record': old_record}},
+                                    before | {'metadata': {'kajamite_record': new_record}},
+                                    find_text=None, replacement=None, metadata_keys={'kajamite_record'})
+        legacy = dict(semantic)
+        semantic = semantic | {'record_changes': receipt.record_changes(old_record, new_record)}
         long_text = 'Shared context ' * 65
         long_change = receipt.for_revise(before, before | {'content': 'Updated'}, [
             {'find_text': long_text + 'Arrive Monday.', 'replacement': long_text + 'Arrive Tuesday.'}])
-        script = 'const CHANGES=' + json.dumps([change, long_change, tracking]) + ';const PAGE=' + json.dumps(html()) + ';' + r'''
+        script = 'const CHANGES=' + json.dumps([change, long_change, tracking, semantic, legacy]) + ';const PAGE=' + json.dumps(html()) + ';' + r'''
 const frame=document.querySelector('iframe');
 const send=data=>frame.contentWindow.postMessage({jsonrpc:'2.0',...data},'*');
 const wait=()=>new Promise(r=>setTimeout(r,70));
@@ -230,6 +237,17 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  assert(el('raw').textContent.includes('synthetic-replay-marker'),'bookkeeping preserved in raw receipt');
  await result({knowledge_change:CHANGES[2]});
  assert(el('overview').textContent.includes('Record tracking updated') && !el('headline').textContent.includes('No content changes'),'tracking-only save remains explicit');
+ await result({knowledge_change:CHANGES[3]});
+ assert(el('overview').textContent.includes('Scope · Product: Alpha → Beta') && el('overview').textContent.includes('needs_revalidation'),'semantic scope and status visible');
+ assert(!el('overview').textContent.includes('Kajamite record'),'record JSON excluded only with projection');
+ el('toggle').click();await wait();
+ assert(el('changes').textContent.includes('Scope · Product') && !el('changes').textContent.includes('Kajamite record'),'semantic detail rows');
+ el('about-toggle').click();await wait();el('evidence-toggle').click();await wait();
+ assert(el('raw').textContent.includes('kajamite_record'),'raw record retained');
+ await result({knowledge_change:CHANGES[4]});
+ assert(el('overview').textContent.includes('Kajamite record'),'legacy record metadata remains reviewable');
+ await result({completed:[{knowledge_change:CHANGES[3]}],errors:[],partial:false});
+ assert(el('overview').textContent.includes('Scope · Product: Alpha → Beta') && !el('overview').textContent.includes('Kajamite record'),'maintenance uses semantic projection');
  await result({knowledge_change:CHANGES[1]});
  assert(el('overview').textContent.includes('Monday')&&el('overview').textContent.includes('Tuesday'),'summary reaches changed words after long shared prefix');
  el('toggle').click();await wait();

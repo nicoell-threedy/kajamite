@@ -71,6 +71,33 @@ def _metadata_changes(
     ]
 
 
+def record_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[str, Any]]:
+    """Project validated records for review; complete metadata stays in the receipt."""
+    result = []
+    changes = _metadata_changes({"metadata": before}, {"metadata": after})
+    for change in sorted(changes, key=lambda item: ({"status": 0, "scope": 1}.get(item["key"], 2), item["key"])):
+        key = change["key"]
+        if key in {"type", "schema_version", "record_id", "record_revision", "claim", "events"}:
+            continue
+        if key in {"scope", "verification"}:
+            for field in _metadata_changes({"metadata": before.get(key, {})}, {"metadata": after.get(key, {})}):
+                if key == "verification" and field["key"] == "record_revision":
+                    continue
+                if key == "verification" and field["key"] == "outcome" and field["after"] == after.get("status"):
+                    continue
+                result.append(field | {"key": key + "." + field["key"]})
+        elif key == "evidence":
+            old, new = before.get(key, {}), after.get(key, {})
+            added, removed = len(new.keys() - old.keys()), len(old.keys() - new.keys())
+            updated = sum(old[source] != new[source] for source in old.keys() & new.keys())
+            result.append({"key": key, "message": f"Sources: {added} added, {removed} removed, {updated} changed. Exact values are in the raw receipt."})
+        elif key == "observations":
+            result.append({"key": key, "message": f"Observation support changed ({len(after.get(key, []))} current observations). Exact values are in the raw receipt."})
+        else:
+            result.append(change)
+    return result
+
+
 def _base(
     operation: str,
     before: dict[str, Any] | None,

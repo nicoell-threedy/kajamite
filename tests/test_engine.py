@@ -186,6 +186,9 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
             "reviewer", "Clarified", {"claim": "Revised synthetic claim.\n"},
         )
         self.assertEqual(2, updated["committed_revision"])
+        self.assertIn("scope.system", [field["key"] for field in created["knowledge_change"]["record_changes"]])
+        self.assertEqual(["status", "verification.verified_at"],
+                         [field["key"] for field in updated["knowledge_change"]["record_changes"]])
         self.assertEqual("Revised synthetic claim.\n", updated["record"]["claim"])
         edits = len([name for name, _ in self.backend.calls if name == "edit_note"])
         replay = await self.engine.record_transition(
@@ -204,6 +207,24 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 identifier, "retract", 1, "retract-1", "2026-01-01T00:00:00.000002Z",
                 "reviewer", "Retract",
             )
+
+    async def test_record_receipt_projects_scope_and_same_count_evidence_changes(self):
+        record = source_record()
+        created = await self.engine.record_create("facts", record)
+        evidence = copy.deepcopy(record["evidence"])
+        evidence["source"]["reference"] = "example:manual@2"
+        updated = await self.engine.record_transition(
+            created["identifier"], "revise", 1, "scope-evidence", "2026-01-01T00:00:00.000001Z",
+            "reviewer", "Updated scope and evidence", {"scope": {"product": "example"}, "evidence": evidence})
+        fields = {item["key"]: item for item in updated["knowledge_change"]["record_changes"]}
+        self.assertEqual("needs_revalidation", fields["status"]["after"])
+        self.assertFalse(fields["scope.system"]["after_present"])
+        self.assertFalse(fields["scope.product"]["before_present"])
+        self.assertIn("0 added, 0 removed, 1 changed", fields["evidence"]["message"])
+        self.assertNotIn("events", fields)
+        self.assertNotIn("record_revision", fields)
+        self.assertIn("kajamite_record", [item["key"] for item in updated["knowledge_change"]["metadata_changes"]])
+        self.assertEqual(evidence, updated["record"]["evidence"])
 
     async def test_transition_explains_safe_verification_errors_without_mutation(self):
         created = await self.engine.record_create("facts", source_record())

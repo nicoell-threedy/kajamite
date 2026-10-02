@@ -141,6 +141,15 @@ Preserve error status; an uncertain mutation must not become a success receipt.
 Compatible presentation updates come from the installed Kajamite package.
 The frontend requires the `mcp` extra; engine-only imports remain dependency-free.
 
+Governed create and transition receipts include optional `record_changes` derived
+from validated before/after records. Scope and verification changes have individual
+field entries; status and dependency changes retain their values. Evidence entries
+count added, removed, and changed sources, including changes with stable source IDs.
+Observation changes have a concise notice. Complete values remain in
+`metadata_changes` and raw receipt disclosure. The UI replaces the full record row
+only when this projection is present; older receipts retain their metadata view.
+This projection describes a saved operation, not current source freshness.
+
 Reuse checks source evidence for actual premises, including transitive premises.
 Each premise is checked once per reuse decision. Ordinary note links are not premises.
 A failed premise check withholds the dependent with a `dependency_` reason.

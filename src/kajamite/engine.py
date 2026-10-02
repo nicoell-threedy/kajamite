@@ -271,6 +271,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if persisted != value:
                 raise MutationUncertain("Record create readback did not match; a write may have committed. Inspect current state before retrying.")
             change = receipt.for_create(after)
+            change["record_changes"] = receipt.record_changes({}, persisted)
             return self._record_result(result, after, persisted, change, replayed=False)
 
     async def record_transition(
@@ -342,6 +343,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     if "replacements" in (changes or {})
                     else receipt.changed_claim_passages(record["claim"], updated["claim"])
                 )
+            change["record_changes"] = receipt.record_changes(record, persisted)
             return self._record_result(result, after, persisted, change, replayed=False)
 
     def _transition(self, record: Mapping[str, Any], action: str, timestamp: str, actor: str,
