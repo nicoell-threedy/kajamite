@@ -294,6 +294,22 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 "reviewer", "Source changed", changes,
             )
 
+    async def test_governed_passage_receipt_uses_canonical_persisted_text(self):
+        for index, replacement in enumerate((
+            {"find_text": "synthetic governed", "replacement": "revised\r\nstructured"},
+            {"find_text": "A synthetic governed claim.", "replacement": "A revised claim.\r"},
+        )):
+            with self.subTest(index=index):
+                created = await self.engine.record_create(f"case-{index}", source_record())
+                revised = await self.engine.record_transition(
+                    created["identifier"], "revise", 1, "canonical-edit", "2026-01-01T00:00:00.000001Z",
+                    "reviewer", "Revise synthetic passage", {"replacements": [replacement]})
+                passage = revised["knowledge_change"]["body_change"]["replacements"][0]
+                for side, record in (("before", created["record"]), ("after", revised["record"])):
+                    self.assertNotIn("\r", passage[side]["preview"])
+                    self.assertIn(passage[side]["preview"], record["claim"])
+                    self.assertEqual(hashlib.sha256(passage[side]["preview"].encode()).hexdigest(), passage[side]["sha256"])
+
     async def test_complete_claim_receipt_shows_distant_changes(self):
         original = source_record()
         body = "# Claim\n" + "Stable introduction.\n" * 120 + "First finding.\n" + "Stable context.\n" * 120 + "Second finding.\n"

@@ -2,6 +2,11 @@
 
 ## Governed revision receipts
 
+Governed passage receipts use validated before/after claims when Markdown line
+endings are normalized. This includes a replacement ending in carriage return
+beside an existing line feed. The 91-test source suite passes, including canonical
+preview/hash checks and the three Chromium tests.
+
 On 2026-10-01, the 89-test source suite passed: 86 passed and three browser
 checks skipped. Synthetic checks cover complete-claim edits after 2,000
 characters, distant edits with unchanged middle lines, a Unicode edit near the

@@ -340,7 +340,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if body_changed and action == "revise":
                 change["body_change"] = (
                     receipt.for_revise(before, after, changes["replacements"])["body_change"]
-                    if "replacements" in (changes or {})
+                    if "replacements" in (changes or {}) and transition_changes["claim"] == updated["claim"]
                     else receipt.changed_claim_passages(record["claim"], updated["claim"])
                 )
             change["record_changes"] = receipt.record_changes(record, persisted)
