@@ -115,6 +115,10 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         schema = next(tool.input_schema for tool in tools if tool.name == "knowledge_search")
         self.assertEqual(schema["properties"]["retrieval_mode"]["enum"], ["text", "semantic", "hybrid"])
         self.assertEqual(schema["properties"]["retrieval_mode"]["default"], "text")
+        for name in ("knowledge_read", "knowledge_search", "knowledge_list", "knowledge_context", "knowledge_related"):
+            item = next(tool.input_schema for tool in tools if tool.name == name)
+            self.assertEqual(item["properties"]["mode"]["enum"], ["reuse", "inspect"])
+            self.assertEqual(item["properties"]["mode"]["default"], "reuse")
 
     def test_receipt_ui_renders_grouped_revision_values(self):
         self.assertIn("grouped_exact_replacement", html())

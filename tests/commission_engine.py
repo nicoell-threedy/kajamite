@@ -104,6 +104,14 @@ async def run(config):
             '2026-01-01T00:00:02.000000Z', 'reviewer', 'Source reviewed; claim remains supported',
             {'verification': verified})
         assert replayed['replayed']
+        preference = await engine.read(note['note']['identifier'])
+        body_budget = len(make_record()['claim']) + len(preference['content'])
+        inspected = await engine.context(identifiers=[identifier, preference['identifier']],
+                                         mode='inspect', max_chars=body_budget)
+        assert not inspected['partial'] and len(inspected['notes']) == 2
+        assert inspected['used_chars'] == body_budget
+        assert inspected['notes'][0]['content'] == make_record()['claim']
+        assert all(item['reuse_checked'] is False for item in inspected['notes'])
     protocol_read = await protocol_call(config, 'knowledge_read', {'identifier': identifier, 'request_scope': SCOPE})
     assert protocol_read['content'] == make_record()['claim'] and protocol_read['record_revision'] == 3
     protocol_changed = await protocol_call(config, 'knowledge_record_transition', {
@@ -138,7 +146,8 @@ async def run(config):
     return {'status': 'passed', 'checks': ['native governed codec', 'request scope', 'plain preference',
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
-        'native dependency maintenance', 'native removal evidence', 'compact supersession references']}
+        'native dependency maintenance', 'native removal evidence', 'compact supersession references',
+        'mixed inspection prose budget']}
 
 
 def main():

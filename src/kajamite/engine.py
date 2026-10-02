@@ -501,7 +501,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         return result
 
     async def read(self, identifier: str, offset: int = 0, limit: int = 12_000, *,
-                   mode: str = "reuse", request_scope: Mapping[str, Any] | None = None,
+                   mode: Literal["reuse", "inspect"] = "reuse", request_scope: Mapping[str, Any] | None = None,
                    include_history: bool = True) -> dict[str, Any]:
         if type(include_history) is not bool:
             raise ValueError("include_history must be a bool")
@@ -546,7 +546,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                      metadata: dict[str, Any] | None = None, cursor: str | None = None,
                      page_size: int = 10, retrieval_mode: Literal["text", "semantic", "hybrid"] = "text",
                      item_types: list[str] | None = None, categories: list[str] | None = None,
-                     *, mode: str = "reuse",
+                     *, mode: Literal["reuse", "inspect"] = "reuse",
                      request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         if mode not in {"reuse", "inspect"}:
             raise ValueError("mode must be reuse or inspect")
@@ -582,7 +582,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
 
     async def list(self, namespace: str = "/", depth: int = 1, page: int = 1,
                    page_size: int = 20, glob: str | None = None, sort: str | None = None,
-                   *, mode: str = "reuse",
+                   *, mode: Literal["reuse", "inspect"] = "reuse",
                    request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         if mode not in {"reuse", "inspect"}:
             raise ValueError("mode must be reuse or inspect")
@@ -633,7 +633,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
 
     async def context(self, namespace: str | None = None, identifiers: list[str] | None = None,
                       page: int = 1, page_size: int = 5, max_chars: int = 12_000, *,
-                      mode: str = "reuse",
+                      mode: Literal["reuse", "inspect"] = "reuse",
                       request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         if (namespace is None) == (identifiers is None):
             raise ValueError("provide exactly one of namespace or identifiers")
@@ -675,16 +675,19 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if public.get("withheld"):
                 omitted.append({"identifier": identifier, "reason": public["reason"]})
                 continue
-            if mode == "inspect":
-                encoded = json.dumps(public["record"], ensure_ascii=False, sort_keys=True)
+            if mode == "inspect" and "record" in public:
+                record = public["record"]
                 available = max_chars - used
-                end = min(len(encoded), available)
-                notes.append({"identifier": identifier, "content": encoded[:end], "offset": 0,
-                              "next_offset": end if end < len(encoded) else None,
-                              "truncated": end < len(encoded), "mode": "inspect",
-                              "content_is_data": True})
-                used += end
-                continue
+                end = min(len(record["claim"]), available)
+                public = {"identifier": public["identifier"], "content": record["claim"][:end], "offset": 0,
+                          "next_offset": None,
+                          "truncated": end < len(record["claim"]),
+                          "record_status": record["status"], "record_revision": record["record_revision"],
+                          "scope": copy.deepcopy(record["scope"]), "verification": copy.deepcopy(record["verification"]),
+                          "evidence": copy.deepcopy(record["evidence"]),
+                          "history_included": False, "content_is_data": True}
+            if mode == "inspect":
+                public.update(mode="inspect", reuse_checked=False)
             used += len(public["content"])
             notes.append(public)
         return {"listing": listing, "notes": notes, "omitted": omitted, "errors": errors,
@@ -694,7 +697,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 "content_is_data": True}
 
     async def related(self, identifier: str, namespaces: list[str], depth: int = 1,
-                      max_notes: int = 10, max_chars: int = 12_000, *, mode: str = "reuse",
+                      max_notes: int = 10, max_chars: int = 12_000, *, mode: Literal["reuse", "inspect"] = "reuse",
                       request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         """Discover relationships natively while applying engine policy to every read."""
         if not namespaces or not isinstance(namespaces, list):

@@ -48,6 +48,33 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_inspection_context_budgets_prose_and_keeps_history_in_explicit_reads(self):
+        created = await self.engine.record_create("facts", source_record())
+        changed = await self.engine.record_transition(created["identifier"], "revise", 1, "revise",
+            "2026-01-01T00:00:01.000000Z", "reviewer", "Correct the explanation", {"claim": "Current explanation."})
+        plain = await self.engine.create("Route", "Read the explanation.", "facts")
+        identifiers = [created["identifier"], plain["note"]["identifier"]]
+        size = len(changed["record"]["claim"]) + len("Read the explanation.")
+        bundle = await self.engine.context(identifiers=identifiers, mode="inspect", max_chars=size)
+        self.assertEqual([note["content"] for note in bundle["notes"]], ["Current explanation.", "Read the explanation."])
+        self.assertEqual(bundle["used_chars"], size)
+        self.assertFalse(bundle["partial"])
+        governed, ordinary = bundle["notes"]
+        self.assertEqual(governed["record_status"], "needs_revalidation")
+        self.assertEqual(governed["evidence"], changed["record"]["evidence"])
+        self.assertFalse(governed["history_included"])
+        self.assertTrue(all(note["mode"] == "inspect" and note["reuse_checked"] is False for note in bundle["notes"]))
+        self.assertEqual(ordinary["review_status"], "unreviewed")
+        self.assertNotIn("record", governed)
+        clipped = await self.engine.context(identifiers=identifiers, mode="inspect", max_chars=5)
+        self.assertEqual(clipped["notes"][0]["content"], "Curre")
+        self.assertTrue(clipped["notes"][0]["truncated"])
+        self.assertIsNone(clipped["notes"][0]["next_offset"])
+        self.assertEqual(clipped["omitted"][0]["reason"], "character_budget")
+        full = await self.engine.read(created["identifier"], mode="inspect")
+        self.assertEqual(full["record"], changed["record"])
+        self.assertGreater(len(full["record"]["events"]), 1)
+
     async def test_supersession_resolves_a_pinned_local_successor_and_replays(self):
         original = source_record()
         created = await self.engine.record_create("facts", original)

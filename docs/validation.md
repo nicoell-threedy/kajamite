@@ -423,3 +423,13 @@ matches and bare-title guesses remain rejected. Tests include mutation readback
 through a qualified alias. The MCP search schema advertises text, semantic, and
 hybrid modes with text as the default; backend capability requirements remain.
 Complete native commissioning passes with alias readback and enum assertions.
+
+## Prose-oriented inspection bundles
+
+The 95-test source suite passes, including browser checks and mixed ordinary /
+governed inspection. Context budgets count prose rather than serialized history.
+Current status, scope, verification, and evidence remain separate; reuse_checked
+is false. Complete history remains available through explicit inspection reads.
+A clipped governed preview has no paging cursor; callers can request the complete
+current record. Full native commissioning passes mixed inspection budgeting.
+The read/search/list/context/related schemas expose reuse and inspect explicitly.

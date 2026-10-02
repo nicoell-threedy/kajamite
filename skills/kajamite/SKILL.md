@@ -213,6 +213,7 @@ For ordinary governed reuse, supply request_scope and respect returned withholdi
 If source checks are unavailable, do not describe a supported record as currently reusable.
 Use mode="inspect", include_history=false for a current working inspection.
 Use the default include_history=true for a full history audit.
+Context and related bundles in inspect mode budget prose, keep current metadata separate, and omit history. They do not establish current reuse eligibility. For a truncated governed inspection preview, read the complete current record with mode="inspect", include_history=false.
 Use knowledge_record_maintain to record affected dependency changes.
 Use knowledge_record_remove only for explicitly authorized physical removal.
 Its result covers storage and bounded active-index evidence, not backups or external copies.

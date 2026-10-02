@@ -170,7 +170,14 @@ Governed inspection includes complete history by default. Use
 inspection without event snapshots. The result marks `history_included: false`.
 The engine validates the complete stored history before returning either view.
 Compact inspection is not a portable record export and does not establish reuse
-eligibility. Ordinary reads and governed reuse retain their existing results.
+eligibility. In context and related bundles, inspect mode returns Markdown claim
+text with current status, scope, verification, and evidence beside it. Only body
+characters consume max_chars; history and repeated observations are excluded.
+Inspection bundles mark reuse_checked=false and do not grant current eligibility.
+Plain notes remain unreviewed in mixed bundles. Use an explicit inspect read for
+the complete record and history. Truncated governed inspection previews do not
+provide a paging cursor: read with mode="inspect", include_history=False for the
+complete current claim. Ordinary reads and governed reuse retain their existing results.
 
 Basic Memory's native text replacement searches the whole Markdown file, including
 frontmatter. The adapter reads the full Markdown and qualifies the replacement with
