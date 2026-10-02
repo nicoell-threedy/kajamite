@@ -64,9 +64,23 @@ async def run(config):
         fields = {field['key']: field for field in revised['knowledge_change']['record_changes']}
         assert fields['status']['after'] == 'needs_revalidation'
         assert 'events' not in fields and 'claim' not in fields
+        older = await engine.record_create('Successions', make_record('older'))
+        successor = await engine.record_create('Successions', make_record('successor'))
+    supersession = {
+        'identifier': older['identifier'], 'action': 'supersede', 'expected_revision': 1,
+        'operation_id': 'compact-supersession', 'timestamp': '2026-01-01T00:00:01.000000Z',
+        'actor': 'reviewer', 'reason': 'Use the canonical explanation',
+        'changes': {'successor_identifier': successor['identifier'], 'successor_revision': 1}}
+    superseded = await protocol_call(config, 'knowledge_record_transition', supersession)
+    assert superseded['record']['status'] == 'superseded'
+    assert superseded['record']['superseded_by'] == 'successor'
+    assert (await protocol_call(config, 'knowledge_record_transition', supersession))['replayed']
     # A new backend session reads the durable record, rather than process-local state.
     async with connect(settings) as backend:
         engine = KnowledgeEngine(backend, evidence_checker=lambda record, scope: True)
+        persisted = await engine.read(older['identifier'], mode='inspect')
+        assert persisted['record'] == superseded['record']
+        assert persisted['record']['events'][0] == older['record']['events'][0]
         original = await engine.read(identifier, mode='inspect')
         assert original['record'] == make_record()
         changed = await engine.record_transition(identifier, 'evidence_health', 1, 'source-event',
@@ -122,7 +136,7 @@ async def run(config):
     return {'status': 'passed', 'checks': ['native governed codec', 'request scope', 'plain preference',
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
-        'native dependency maintenance', 'native removal evidence']}
+        'native dependency maintenance', 'native removal evidence', 'compact supersession references']}
 
 
 def main():

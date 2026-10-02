@@ -93,6 +93,13 @@ against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.
 Without fresh verification, a revised claim becomes `needs_revalidation`.
 The original transition request determines replay identity.
+For supersession, changes can contain successor_identifier and successor_revision.
+The engine authorizes and reads that stored record under the same mutation lock,
+checks its revision and namespace, and applies the existing support, scope, and
+acyclic-dependency requirements. The complete successor object remains supported
+for compatibility. Compact references avoid copying a second record and its history.
+A rejected reference leaves the original unchanged. Replays resolve by the original
+request fingerprint before checking the successor again.
 
 ## Retrieval
 

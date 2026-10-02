@@ -201,6 +201,12 @@ digits and `Z` for event and verification times, such as
 verification and no later than the event. Correct a reported field error before
 retrying; removing verification makes a changed claim need revalidation.
 If a transition result is uncertain, inspect current state before a retry.
+For action="supersede", pass changes.successor_identifier and changes.successor_revision
+from an inspected stored successor. The engine resolves it under the mutation lock;
+do not repeat its full record payload. Both records must have the same namespace
+and scope, and the successor must remain supported at the expected revision.
+Do not change scope merely to pass this check. A scope correction needs independent
+evidence and fresh verification before a record can remain supported.
 Generic note edits and moves cannot bypass the record lifecycle.
 
 For ordinary governed reuse, supply request_scope and respect returned withholding reasons.

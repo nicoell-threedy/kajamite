@@ -306,6 +306,25 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     result.update(outcome=health["outcome"], mutated=False, transient=health["transient"])
                     return result
             transition_changes = dict(changes or {})
+            if action == "supersede" and "successor_identifier" in transition_changes:
+                if set(transition_changes) != {"successor_identifier", "successor_revision"}:
+                    raise KnowledgeError("supersede requires successor_identifier and successor_revision")
+                revision = transition_changes["successor_revision"]
+                if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
+                    raise KnowledgeError("successor_revision must be a positive integer")
+                successor_identifier = transition_changes["successor_identifier"]
+                if not isinstance(successor_identifier, str) or not successor_identifier:
+                    raise KnowledgeError("successor_identifier must be a note identifier")
+                await self._authorize(successor_identifier, None)
+                successor_note = await self._read_full(successor_identifier)
+                if self._note_namespace(successor_note) != self._note_namespace(before):
+                    raise KnowledgeError("successor must be in the same namespace")
+                successor = self._record_from_note(successor_note)
+                if successor is None:
+                    raise KnowledgeError("successor must be a governed record")
+                if successor["record_revision"] != revision:
+                    raise KnowledgeError("successor revision conflict; read the current successor before retrying")
+                transition_changes = {"successor": successor}
             if action == "revise" and "replacements" in transition_changes:
                 if "claim" in transition_changes:
                     raise KnowledgeError("claim and replacements cannot be supplied together")
@@ -364,7 +383,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     raise KnowledgeError("retract does not accept changes")
                 return self.records.retract(record, **event)
             if action == "supersede":
-                return self.records.supersede(record, changes.pop("successor"), **event) if set(changes) == {"successor"} else self._invalid_transition()
+                if set(changes) != {"successor"} or not isinstance(changes["successor"], Mapping):
+                    raise KnowledgeError("supersede requires successor_identifier and successor_revision, or a complete successor record")
+                return self.records.supersede(record, changes["successor"], **event)
             if action == "dependency_health":
                 if set(changes) != {"condition_id"}:
                     return self._invalid_transition()
@@ -378,6 +399,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 "verification.verified_at must use canonical UTC microseconds",
                 "verification.verified_at must be newer than the prior semantic verification",
                 "verification.verified_at cannot be later than the event timestamp",
+                "only a supported record can be superseded",
+                "supersession requires a supported successor",
+                "record cannot supersede itself",
                 f"verification.record_revision must be {record['record_revision'] + 1}",
             }:
                 raise KnowledgeError(detail) from error

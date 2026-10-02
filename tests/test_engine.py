@@ -48,6 +48,45 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_supersession_resolves_a_pinned_local_successor_and_replays(self):
+        original = source_record()
+        created = await self.engine.record_create("facts", original)
+        successor = self.engine.records.create_record(
+            "replacement", "Replacement explanation.", original["scope"], original["observations"],
+            original["evidence"], original["verification"], timestamp=STAMP,
+            actor="reviewer", reason="Evidence reviewed", event_id="replacement-created")
+        target = await self.engine.record_create("facts", successor)
+        changes = {"successor_identifier": target["identifier"], "successor_revision": 1}
+        async def transition(payload, operation="supersede"):
+            return await self.engine.record_transition(created["identifier"], "supersede", 1, operation,
+                "2026-01-01T00:00:01.000000Z", "reviewer", "Consolidate supported explanations", payload)
+        for payload, message in (
+            ({"successor": target["identifier"]}, "complete successor record"),
+            ({"successor_identifier": target["identifier"]}, "successor_revision"),
+            (changes | {"successor_revision": True}, "positive integer"),
+            (changes | {"successor_revision": 2}, "successor revision conflict"),
+            (changes | {"successor_identifier": created["identifier"]}, "cannot supersede itself"),
+        ):
+            with self.assertRaisesRegex(KnowledgeError, message):
+                await transition(payload)
+            self.assertEqual((await self.engine.read(created["identifier"], mode="inspect"))["record"], original)
+        other = await self.engine.record_create("other", successor)
+        with self.assertRaisesRegex(KnowledgeError, "same namespace"):
+            await transition(changes | {"successor_identifier": other["identifier"]})
+        incompatible = self.engine.records.create_record(
+            "different-scope", "Different applicability.", {"system": "different"}, original["observations"],
+            original["evidence"], original["verification"], timestamp=STAMP,
+            actor="reviewer", reason="Evidence reviewed", event_id="different-created")
+        different = await self.engine.record_create("facts", incompatible)
+        with self.assertRaisesRegex(KnowledgeError, "same scope"):
+            await transition(changes | {"successor_identifier": different["identifier"]})
+        self.assertEqual((await self.engine.read(created["identifier"], mode="inspect"))["record"], original)
+        result = await transition(changes)
+        self.assertEqual(result["record"]["status"], "superseded")
+        self.assertEqual(result["record"]["superseded_by"], "replacement")
+        self.assertEqual(result["record"]["events"][0], original["events"][0])
+        self.assertTrue((await transition(changes))["replayed"])
+
     async def test_reuse_checks_actual_premises_and_withholds_stale_snippets(self):
         premise = source_record()
         await self.engine.record_create("facts", premise)

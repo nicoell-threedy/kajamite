@@ -404,3 +404,13 @@ unverified.
 The complete native commissioning entrypoint also passed note operations,
 capability checks, and governed engine commissioning. The final three browser
 tests passed with maintenance projection coverage enabled.
+
+## Compact supersession references
+
+The 92-test source suite passes, including three Chromium checks. Supersession
+can resolve a stored successor by identifier and expected revision. Synthetic
+checks cover stale revisions, namespace and scope mismatches, self-supersession,
+unchanged records after rejection, preserved history, and operation replay.
+Complete native commissioning passes, including compact references through MCP
+and readback after reconnect. Installed-package validation for this addition is
+tracked separately from the earlier receipt-review wheel.
