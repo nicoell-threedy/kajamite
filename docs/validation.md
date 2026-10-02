@@ -1,5 +1,13 @@
 # Validation
 
+## Required verification fields
+
+Missing verification timestamps return a specific field error before mutation.
+Synthetic rejection checks preserve stored bytes and keep unrelated private
+diagnostics opaque. All 95 source checks pass across the main suite and separate
+three-test Chromium run. Native governed-engine commissioning passes.
+Package validation remains recorded at the inspection-context revision below.
+
 ## Governed revision receipts
 
 Governed passage receipts use validated before/after claims when Markdown line

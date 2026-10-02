@@ -298,6 +298,7 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         verification = {**source_record()["verification"], "record_revision": 2,
                         "verified_at": "2026-01-01T00:00:01.000000Z"}
         cases = [
+            ({key: value for key, value in verification.items() if key != "verified_at"}, "verification.verified_at must be non-empty text"),
             ({**verification, "verified_at": "2026-01-01T00:00:01.000Z"}, "verification.verified_at must use canonical UTC microseconds"),
             ({**verification, "record_revision": 1}, "verification.record_revision must be 2"),
         ]

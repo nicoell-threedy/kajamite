@@ -396,6 +396,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             detail = str(error)
             if isinstance(error, RecordError) and detail in {
                 "event timestamp must use canonical UTC microseconds",
+                "verification.verified_at must be non-empty text",
                 "verification.verified_at must use canonical UTC microseconds",
                 "verification.verified_at must be newer than the prior semantic verification",
                 "verification.verified_at cannot be later than the event timestamp",
