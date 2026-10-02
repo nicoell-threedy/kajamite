@@ -140,6 +140,18 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.service = KnowledgeService(self.backend)
 
+    async def test_qualified_wiki_path_matches_only_its_physical_note(self):
+        note = {"file_path": "notes/topic.md", "permalink": "project/notes/topic",
+                "title": "Topic", "content": "original", "frontmatter": {}}
+        self.backend.notes[note["file_path"]] = note
+        self.backend.fuzzy = note
+        self.assertEqual((await self.service.read("notes/topic"))["identifier"], "notes/topic.md")
+        changed = await self.service.edit("notes/topic", "original", "corrected")
+        self.assertEqual(changed["knowledge_change"]["after"]["identifier"], "notes/topic.md")
+        for identifier in ("topic", "other/topic", "notes/wrong", "Notes/topic", "notes/topic.md.backup"):
+            with self.subTest(identifier=identifier), self.assertRaisesRegex(KnowledgeError, "fuzzy match"):
+                await self.service.read(identifier)
+
     async def test_create_is_literal_and_same_titles_are_folder_distinct(self):
         first = await self.service.create("Record", "literal body", "/alpha", metadata={"status": "odd"})
         second = await self.service.create("Record", "other body", "beta", kind="project")

@@ -39,6 +39,7 @@ async def protocol_call(config, name, arguments):
             tools = await session.list_tools()
             schema = next(tool.input_schema for tool in tools.tools if tool.name == 'knowledge_search')
             assert 'namespaces' in schema.get('properties', {})
+            assert schema['properties']['retrieval_mode']['enum'] == ['text', 'semantic', 'hybrid']
             assert 'args' not in schema.get('properties', {}) and 'kwargs' not in schema.get('properties', {})
             return unpack(await session.call_tool(name, arguments))
 
@@ -51,6 +52,7 @@ async def run(config):
         identifier = created['identifier']
         assert created['committed_revision'] == 1
         assert (await engine.read(identifier, request_scope=SCOPE))['content'] == make_record()['claim']
+        assert (await engine.read(identifier.removesuffix('.md'), request_scope=SCOPE))['content'] == make_record()['claim']
         assert (await engine.read(identifier, request_scope={'system': 'other'}))['withheld']
         note = await engine.create('Preference', 'Prefer the morning session.', 'Notes', kind='preference')
         assert (await engine.read(note['note']['identifier']))['review_status'] == 'unreviewed'

@@ -109,6 +109,13 @@ async def _serve():
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_engine_search_schema_advertises_supported_modes(self):
+        from kajamite.engine import KnowledgeEngine
+        tools = await create_server(KnowledgeEngine(None)).list_tools()
+        schema = next(tool.input_schema for tool in tools if tool.name == "knowledge_search")
+        self.assertEqual(schema["properties"]["retrieval_mode"]["enum"], ["text", "semantic", "hybrid"])
+        self.assertEqual(schema["properties"]["retrieval_mode"]["default"], "text")
+
     def test_receipt_ui_renders_grouped_revision_values(self):
         self.assertIn("grouped_exact_replacement", html())
 

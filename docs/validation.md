@@ -414,3 +414,12 @@ unchanged records after rejection, preserved history, and operation replay.
 Complete native commissioning passes, including compact references through MCP
 and readback after reconnect. Installed-package validation for this addition is
 tracked separately from the earlier receipt-review wheel.
+
+## Qualified links and search schema
+
+The 94-test source suite passes, including three browser checks. Exact physical
+paths with a directory component can omit the Markdown suffix; unrelated fuzzy
+matches and bare-title guesses remain rejected. Tests include mutation readback
+through a qualified alias. The MCP search schema advertises text, semantic, and
+hybrid modes with text as the default; backend capability requirements remain.
+Complete native commissioning passes with alias readback and enum assertions.

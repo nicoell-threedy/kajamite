@@ -14,7 +14,7 @@ import copy
 import hashlib
 import inspect
 import json
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Literal, Mapping
 
 from . import receipt
 from .errors import BackendError, MutationUncertain
@@ -544,7 +544,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
     async def search(self, namespaces: list[str], query: str | None = None,
                      recursive: bool = False, kind: str | None = None,
                      metadata: dict[str, Any] | None = None, cursor: str | None = None,
-                     page_size: int = 10, retrieval_mode: str = "text",
+                     page_size: int = 10, retrieval_mode: Literal["text", "semantic", "hybrid"] = "text",
                      item_types: list[str] | None = None, categories: list[str] | None = None,
                      *, mode: str = "reuse",
                      request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:

@@ -7,7 +7,7 @@ import binascii
 import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from .errors import BackendError, MutationUncertain
 from . import receipt
@@ -65,7 +65,7 @@ class NoteOperations:
         metadata: dict[str, Any] | None = None,
         cursor: str | None = None,
         page_size: int = 10,
-        retrieval_mode: str = "text",
+        retrieval_mode: Literal["text", "semantic", "hybrid"] = "text",
         item_types: list[str] | None = None,
         categories: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -616,6 +616,9 @@ class NoteOperations:
         requested = requested.strip().replace("\\", "/").lstrip("/")
         candidates = {str(value).replace("\\", "/").lstrip("/")
                       for value in (note.get("file_path"), note.get("permalink")) if value}
+        path = str(note.get("file_path", "")).replace("\\", "/").lstrip("/")
+        if "/" in path and path.endswith(".md"):
+            candidates.add(path.removesuffix(".md"))
         if requested.startswith("memory://"):
             return requested.removeprefix("memory://").lstrip("/") in candidates
         return requested in candidates

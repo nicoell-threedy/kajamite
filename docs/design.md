@@ -28,7 +28,8 @@ siblings. Search scope uses file paths, not permalinks, because native moves may
 preserve permalink identity. Return actual identifiers/paths for follow-up calls.
 Namespace matching preserves canonical path case; use paths returned by listing
 or mutation rather than guessing case or slugs. Bare ambiguous titles are not
-accepted as note addresses.
+accepted as note addresses. A directory-qualified wiki target may omit `.md` only
+when the returned physical path matches that exact qualified stem.
 
 ## Search implementation
 
