@@ -308,14 +308,21 @@ export function describe(output: any = {}, isError = false): View {
       view.summary = "Location changed; note text is unchanged.";
     else if (!view.entries.length)
       view.summary = isChanged(receipt)
-        ? "Record tracking updated; note text and other fields are unchanged."
+        ? "Audit information updated; note text unchanged."
         : "The note already matches the requested edit.";
   }
   if (output?.replayed)
     view.summary = "This is an earlier result. Nothing was written again.";
   if (output?.preview) view.summary = "Proposed text. Nothing has been saved.";
   if (completedResult(output) && !view.entries.length)
-    view.summary = "No notes changed in this operation.";
+    view.summary = output.completed.some(
+      (item: any) =>
+        !item.replayed &&
+        item.knowledge_change &&
+        isChanged(item.knowledge_change),
+    )
+      ? "Audit information updated; note text unchanged."
+      : "No notes changed in this operation.";
   if (isError) view.summary = excerpt(view.entries[0]?.message, 220);
   if (!view.entries.length && !view.summary)
     view.summary = "No saved change could be confirmed from this result.";

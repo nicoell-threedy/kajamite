@@ -100,6 +100,13 @@ that heading retain the stored title. Reads, searches, lists, and context bundle
 use the same display label. Ordinary notes keep their explicit backend title.
 Display titles do not rename files, change record IDs, or become aliases for
 subsequent operations. No additional title metadata is persisted.
+Primary record-change rows omit verification timestamps, evidence observation
+times, and observation statements that mirror their respective before/after
+claims. Complete values remain in raw record metadata and history. Source
+reference changes, evidence additions/removals, independent observation text,
+and changed support bindings remain reviewable. A source-reference update does
+not by itself establish that source behavior changed. Audit-only saves remain
+explicit in both single-note and batch summaries.
 The replacements use the same one-to-100 exact, unique, disjoint selection rules
 against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.

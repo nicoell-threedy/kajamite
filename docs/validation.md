@@ -1,5 +1,15 @@
 # Validation
 
+## Primary changes and audit information
+
+All 98 source checks pass, including browser coverage for audit-only single and
+batch saves. Native governed-engine commissioning verifies that unchanged-source
+rechecks retain their evidence, verification, history, and reuse eligibility.
+Projection controls keep changed source references, fingerprints, support
+bindings, and independent observations visible. A heading-only receipt displays
+one primary change while its original audit fields remain available in raw
+disclosure. This presentation change does not reduce persisted history.
+
 ## Reflow and readable receipt subjects
 
 All 97 source checks pass, including three Chromium tests, and frontend format,

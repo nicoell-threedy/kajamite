@@ -20,10 +20,10 @@ STAMP = '2026-01-01T00:00:00.000000Z'
 SCOPE = {'system': 'example', 'version': '1'}
 
 
-def make_record(identifier="service-port", depends_on=None):
+def make_record(identifier="service-port", depends_on=None, *, mirror_claim=False):
     return RecordEngine().create_record(
         identifier, 'The service uses port 8080.\n', SCOPE,
-        [{'observation_id': 'manual', 'statement': 'The manual specifies port 8080.', 'evidence_ids': ['manual']}],
+        [{'observation_id': 'manual', 'statement': 'The service uses port 8080.\n' if mirror_claim else 'The manual specifies port 8080.', 'evidence_ids': ['manual']}],
         {'manual': {'kind': 'document', 'reference': 'example:manual@1', 'observed_at': STAMP}},
         {'record_revision': 1, 'verified_at': STAMP, 'verifier': 'reviewer', 'outcome': 'supported', 'evidence_ids': ['manual']},
         depends_on=depends_on, timestamp=STAMP, actor='reviewer', reason='Manual reviewed', event_id='created')
@@ -73,6 +73,17 @@ async def run(config):
         fields = {field['key']: field for field in revised['knowledge_change']['record_changes']}
         assert fields['status']['after'] == 'needs_revalidation'
         assert 'events' not in fields and 'claim' not in fields
+        audited = await engine.record_create('Audit', make_record('source-recheck', mirror_claim=True))
+        current = audited['record']
+        evidence = {key: value | {'observed_at': '2026-01-01T00:00:01.000000Z'} for key, value in current['evidence'].items()}
+        verification = current['verification'] | {'record_revision': 2, 'verified_at': '2026-01-01T00:00:01.000000Z'}
+        refreshed = await engine.record_transition(audited['identifier'], 'revise', 1, 'recheck',
+            verification['verified_at'], 'reviewer', 'Recheck unchanged evidence',
+            {'evidence': evidence, 'verification': verification})
+        assert refreshed['knowledge_change']['record_changes'] == []
+        assert refreshed['record']['evidence'] == evidence and refreshed['record']['verification'] == verification
+        assert refreshed['record']['events'][0] == current['events'][0]
+        assert (await engine.read(audited['identifier'], request_scope=SCOPE))['content'] == current['claim']
         older = await engine.record_create('Successions', make_record('older'))
         successor = await engine.record_create('Successions', make_record('successor'))
     supersession = {
@@ -154,7 +165,7 @@ async def run(config):
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
-        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename']}
+        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention']}
 
 
 def main():

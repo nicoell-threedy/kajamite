@@ -276,7 +276,7 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(2, updated["committed_revision"])
         self.assertIn("scope.system", [field["key"] for field in created["knowledge_change"]["record_changes"]])
-        self.assertEqual(["status", "verification.verified_at"],
+        self.assertEqual(["status"],
                          [field["key"] for field in updated["knowledge_change"]["record_changes"]])
         self.assertEqual("Revised synthetic claim.\n", updated["record"]["claim"])
         edits = len([name for name, _ in self.backend.calls if name == "edit_note"])
@@ -297,6 +297,42 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 "reviewer", "Retract",
             )
 
+    async def test_record_review_omits_rechecks_and_mirrors_but_retains_support_changes(self):
+        original = source_record()
+        claim = 'An existing explanation.'
+        record = self.engine.records.create_record('review', claim, original['scope'],
+            [{'observation_id': 'claim', 'statement': claim, 'evidence_ids': ['source']}],
+            original['evidence'], original['verification'], timestamp=STAMP,
+            actor='reviewer', reason='Source reviewed', event_id='created')
+        created = await self.engine.record_create('facts', record)
+        evidence = copy.deepcopy(record['evidence'])
+        evidence['source']['observed_at'] = '2026-01-01T00:00:01.000000Z'
+        verification = record['verification'] | {'record_revision': 2, 'verified_at': evidence['source']['observed_at']}
+        current_claim = '# A readable title\n\n' + claim
+        observations = [record['observations'][0] | {'statement': current_claim}]
+        updated = await self.engine.record_transition(created['identifier'], 'revise', 1, 'heading',
+            verification['verified_at'], 'reviewer', 'Name the topic',
+            {'claim': current_claim, 'evidence': evidence, 'verification': verification, 'observations': observations})
+        self.assertEqual([], updated['knowledge_change']['record_changes'])
+        self.assertEqual(evidence, updated['record']['evidence'])
+        self.assertEqual(verification, updated['record']['verification'])
+        self.assertEqual(observations, updated['record']['observations'])
+        self.assertEqual(record['events'], updated['record']['events'][:1])
+        self.assertTrue(updated['knowledge_change']['metadata_changes'])
+        snapshot = copy.deepcopy(updated['record'])
+        for field, value in [('reference', 'example:manual@2'), ('excerpt_sha256', 'a' * 64)]:
+            changed = copy.deepcopy(snapshot)
+            changed['evidence']['source'][field] = value
+            rows = receipt.record_changes(snapshot, changed)
+            self.assertIn('1 updated', next(row['message'] for row in rows if row['key'] == 'evidence'))
+        changed = copy.deepcopy(snapshot)
+        changed['observations'][0]['evidence_ids'] = ['different-source']
+        self.assertEqual(['observations'], [row['key'] for row in receipt.record_changes(snapshot, changed)])
+        changed['observations'][0]['evidence_ids'] = ['source']
+        changed['observations'][0]['statement'] = 'An independently changed observation.'
+        self.assertEqual(['observations'], [row['key'] for row in receipt.record_changes(snapshot, changed)])
+        self.assertEqual(snapshot, updated['record'])
+
     async def test_record_receipt_projects_scope_and_same_count_evidence_changes(self):
         record = source_record()
         created = await self.engine.record_create("facts", record)
@@ -309,7 +345,7 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("needs_revalidation", fields["status"]["after"])
         self.assertFalse(fields["scope.system"]["after_present"])
         self.assertFalse(fields["scope.product"]["before_present"])
-        self.assertIn("0 added, 0 removed, 1 changed", fields["evidence"]["message"])
+        self.assertIn("0 added, 0 removed, 1 updated", fields["evidence"]["message"])
         self.assertNotIn("events", fields)
         self.assertNotIn("record_revision", fields)
         self.assertIn("kajamite_record", [item["key"] for item in updated["knowledge_change"]["metadata_changes"]])

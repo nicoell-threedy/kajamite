@@ -120,7 +120,7 @@ def record_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[s
             continue
         if key in {"scope", "verification"}:
             for field in _metadata_changes({"metadata": before.get(key, {})}, {"metadata": after.get(key, {})}):
-                if key == "verification" and field["key"] == "record_revision":
+                if key == "verification" and field["key"] in {"record_revision", "verified_at"}:
                     continue
                 if key == "verification" and field["key"] == "outcome" and field["after"] == after.get("status"):
                     continue
@@ -128,10 +128,18 @@ def record_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[s
         elif key == "evidence":
             old, new = before.get(key, {}), after.get(key, {})
             added, removed = len(new.keys() - old.keys()), len(old.keys() - new.keys())
-            updated = sum(old[source] != new[source] for source in old.keys() & new.keys())
-            result.append({"key": key, "message": f"Sources: {added} added, {removed} removed, {updated} changed. Exact values are in the raw receipt."})
+            updated = sum(
+                {field: value for field, value in old[source].items() if field != "observed_at"}
+                != {field: value for field, value in new[source].items() if field != "observed_at"}
+                for source in old.keys() & new.keys())
+            if added or removed or updated:
+                result.append({"key": key, "message": f"Source references: {added} added, {removed} removed, {updated} updated. Exact values are in the raw receipt."})
         elif key == "observations":
-            result.append({"key": key, "message": f"Observation support changed ({len(after.get(key, []))} current observations). Exact values are in the raw receipt."})
+            def support(record: dict[str, Any]) -> list[dict[str, Any]]:
+                return [item | {"statement": None} if item["statement"] == record.get("claim") else item
+                        for item in record.get("observations", [])]
+            if support(before) != support(after):
+                result.append({"key": key, "message": f"Observation support changed ({len(after.get(key, []))} current observations). Exact values are in the raw receipt."})
         else:
             result.append(change)
     return result
