@@ -195,12 +195,16 @@ const load = async index => {
 
     def test_semantic_summary_and_bounded_comparison(self):
         before = {'file_path': 'Plans/Conference.md', 'content': 'Agenda', 'metadata': {'status': 'draft', 'record_revision': 1}}
-        change = receipt.for_edit(before, before | {'metadata': {'status': 'confirmed', 'record_revision': 2}},
-                                  find_text=None, replacement=None, metadata_keys={'status', 'record_revision'})
+        operations = {'saved': {'fingerprint': 'synthetic-replay-marker', 'committed_revision': 2}}
+        change = receipt.for_edit(before, before | {'metadata': {'status': 'confirmed', 'record_revision': 2,
+                                                                'kajamite_operations': operations}},
+                                  find_text=None, replacement=None, metadata_keys={'status', 'record_revision', 'kajamite_operations'})
+        tracking = receipt.for_edit(before, before | {'metadata': before['metadata'] | {'kajamite_operations': operations}},
+                                    find_text=None, replacement=None, metadata_keys={'kajamite_operations'})
         long_text = 'Shared context ' * 65
         long_change = receipt.for_revise(before, before | {'content': 'Updated'}, [
             {'find_text': long_text + 'Arrive Monday.', 'replacement': long_text + 'Arrive Tuesday.'}])
-        script = 'const CHANGES=' + json.dumps([change, long_change]) + ';const PAGE=' + json.dumps(html()) + ';' + r'''
+        script = 'const CHANGES=' + json.dumps([change, long_change, tracking]) + ';const PAGE=' + json.dumps(html()) + ';' + r'''
 const frame=document.querySelector('iframe');
 const send=data=>frame.contentWindow.postMessage({jsonrpc:'2.0',...data},'*');
 const wait=()=>new Promise(r=>setTimeout(r,70));
@@ -218,8 +222,14 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  assert(el('subject').textContent.includes('Conference'),'named subject');
  assert(el('overview').textContent.includes('Status: draft → confirmed'),'field labeled in summary');
  assert(!el('overview').textContent.includes('revision'),'counter excluded');
+ assert(el('counts').textContent==='1 note · 1 change' && !el('overview').textContent.includes('synthetic-replay-marker'),'bookkeeping excluded from review count');
  el('toggle').click();await wait();assert(el('changes').textContent.includes('Status'),'field labeled in details');
  assert(!el('evidence-toggle')&&!el('raw'),'diagnostics secondary');
+ assert(!el('changes').textContent.includes('Kajamite operations'),'bookkeeping excluded from primary details');
+ el('about-toggle').click();await wait();el('evidence-toggle').click();await wait();
+ assert(el('raw').textContent.includes('synthetic-replay-marker'),'bookkeeping preserved in raw receipt');
+ await result({knowledge_change:CHANGES[2]});
+ assert(el('overview').textContent.includes('Record tracking updated') && !el('headline').textContent.includes('No content changes'),'tracking-only save remains explicit');
  await result({knowledge_change:CHANGES[1]});
  assert(el('overview').textContent.includes('Monday')&&el('overview').textContent.includes('Tuesday'),'summary reaches changed words after long shared prefix');
  el('toggle').click();await wait();

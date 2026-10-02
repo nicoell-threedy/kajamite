@@ -251,7 +251,11 @@ function App() {
                     {view.entries.length > overview.length && !state.error && (
                       <p className="text-xs text-muted-foreground">
                         {view.entries.length - overview.length} more{" "}
-                        {batch ? "items" : "changes"} in details
+                        {batch ? "item" : "change"}
+                        {view.entries.length - overview.length === 1
+                          ? ""
+                          : "s"}{" "}
+                        in details
                       </p>
                     )}
                   </>

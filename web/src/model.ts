@@ -83,7 +83,8 @@ const receiptEntries = (receipt: any) => {
         "Text changed outside the receipt excerpts. The changed passage is unavailable.";
   }
   for (const change of receipt.metadata_changes ?? []) {
-    if (["record_revision"].includes(change.key)) continue;
+    if (["record_revision", "kajamite_operations"].includes(change.key))
+      continue;
     result.push({
       title: fieldLabel(change.key),
       note: title,

@@ -364,3 +364,17 @@ and replay handling. Frontend formatting, types, and reproducible bundle checks
 passed. A synthetic native receipt was inspected at desktop and 320px widths.
 Maintenance batches and legacy receipts without a top-level record remain outside
 this presentation change. Actual client-host rendering remains unverified.
+
+## Replay bookkeeping disclosure
+
+The reserved `kajamite_operations` field is excluded from primary review rows and
+their change count. Raw receipts retain the complete field. A bookkeeping-only
+receipt still states that record tracking changed; it is not reported as a no-op.
+Semantic metadata remains visible. This changes presentation, not stored bytes.
+
+All 89 tests passed, including Chromium checks for semantic-field visibility,
+review counts, raw-receipt preservation, and bookkeeping-only outcomes. All three
+browser tests passed again after the singular-count wording adjustment. Frontend
+checks passed. A synthetic governed receipt showed both text edits and its saved
+state while its review count decreased from four to three. Full record metadata
+projection and actual client-host acceptance remain open.
