@@ -27,9 +27,30 @@ const theme = JSON.parse(
 );
 const bridge = createBridge(theme);
 
-// Highlight a single changed span, preserving all unchanged context. Multiple
-// edits inside the span remain verbatim; this is not a generated paraphrase.
-function changedSpan(value: string, other: string) {
+// Legacy receipts retain broad-span highlighting. New ranges address code points.
+function changedSpan(
+  value: string,
+  other: string,
+  ranges?: [number, number][],
+) {
+  if (ranges) {
+    const points = Array.from(value);
+    let offset = 0;
+    const parts = ranges.flatMap(([start, end]) => {
+      const unchanged = points.slice(offset, start).join("");
+      offset = end;
+      return [
+        unchanged,
+        <mark key={start}>{points.slice(start, end).join("")}</mark>,
+      ];
+    });
+    return (
+      <>
+        {parts}
+        {points.slice(offset).join("")}
+      </>
+    );
+  }
   if (value === other) return value;
   let start = 0,
     end = 0;
@@ -61,10 +82,12 @@ function Comparison({ item }: { item: Entry }) {
     (item.message !== undefined
       ? item.message.length
       : Math.max(before.length, after.length)) > 600;
+  const oldPoints = Array.from(before),
+    newPoints = Array.from(after);
   let common = 0;
   while (
-    common < Math.min(before.length, after.length) &&
-    before[common] === after[common]
+    common < Math.min(oldPoints.length, newPoints.length) &&
+    oldPoints[common] === newPoints[common]
   )
     common++;
   const offset =
@@ -73,8 +96,43 @@ function Comparison({ item }: { item: Entry }) {
     full || !long
       ? s
       : (offset ? "…" : "") +
-        s.slice(offset, offset + 600) +
-        (s.length > offset + 600 ? "…" : "");
+        Array.from(s)
+          .slice(offset, offset + 600)
+          .join("") +
+        (Array.from(s).length > offset + 600 ? "…" : "");
+  const visibleRanges = (
+    value: string,
+    ranges: unknown,
+  ): [number, number][] | undefined => {
+    const length = Array.from(value).length;
+    let previous = 0;
+    if (
+      !Array.isArray(ranges) ||
+      ranges.length > 1000 ||
+      !ranges.every((range) => {
+        if (!Array.isArray(range) || range.length !== 2) return false;
+        const [start, end] = range;
+        const valid =
+          Number.isInteger(start) &&
+          Number.isInteger(end) &&
+          start >= previous &&
+          end > start &&
+          end <= length;
+        previous = end;
+        return valid;
+      })
+    )
+      return undefined;
+    const start = full || !long ? 0 : offset;
+    const end = full || !long ? length : offset + 600;
+    const prefix = start ? 1 : 0;
+    return ranges
+      .filter(([a, b]) => b > start && a < end)
+      .map(([a, b]) => [
+        Math.max(a, start) - start + prefix,
+        Math.min(b, end) - start + prefix,
+      ]);
+  };
   return (
     <div className="flex flex-col gap-2">
       {item.message !== undefined ? (
@@ -95,11 +153,23 @@ function Comparison({ item }: { item: Entry }) {
         <div className="diff">
           <div className="diff-line">
             <span className="diff-label">Before</span>
-            <p>{changedSpan(shown(before), shown(after))}</p>
+            <p>
+              {changedSpan(
+                shown(before),
+                shown(after),
+                visibleRanges(before, item.beforeRanges),
+              )}
+            </p>
           </div>
           <div className="diff-line diff-after">
             <span className="diff-label">After</span>
-            <p>{changedSpan(shown(after), shown(before))}</p>
+            <p>
+              {changedSpan(
+                shown(after),
+                shown(before),
+                visibleRanges(after, item.afterRanges),
+              )}
+            </p>
           </div>
         </div>
       )}
@@ -223,7 +293,7 @@ function App() {
           {view.subject && !active && (
             <CardDescription id="subject" className="break-anywhere">
               <strong className="text-card-foreground">
-                {noteName(view.subject)}
+                {view.subjectTitle || noteName(view.subject)}
               </strong>
               <span className="note-path">{view.subject}</span>
             </CardDescription>

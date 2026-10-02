@@ -24,6 +24,11 @@ class UiTests(unittest.TestCase):
                                    replacement=late_after['content'], metadata_keys=set())
         clipped_group = receipt.for_revise(late_before, late_after, [
             {'find_text': late_before['content'], 'replacement': late_after['content']}])
+        reflow_before = {'file_path': 'Notes/stable-id.md', 'title': 'Resource retry policy',
+                         'content': 'Keep shared resource 💡 café. Retry after 10 seconds. Retain instance state.'}
+        reflow_after = reflow_before | {'content': '# Retry policy\n\n- Keep shared resource 💡 café.\n- Retry after 20 seconds.\n- Retain instance state.'}
+        reflow = receipt.for_edit(reflow_before, reflow_after, find_text=reflow_before['content'],
+                                 replacement=reflow_after['content'], metadata_keys=set())
         script = r'''
 const frame = document.querySelector('iframe');
 let requests = [], modeReply = 'fullscreen', sizes = 0, initialized;
@@ -96,6 +101,17 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  await result({knowledge_change:CHANGE,record:{status:'needs_revalidation'},content:[{type:'text',text:'uncertain'}]},true);
  assert(el('status').textContent.includes('may have committed') && !el('status').textContent.includes('Saved record state'), 'failure takes precedence over record state');
  await result({}); assert(el('headline').textContent === 'No change receipt returned', 'missing receipt');
+ await result({knowledge_change:REFLOW}); el('toggle').click(); await wait();
+ assert(el('subject').querySelector('strong').textContent === 'Resource retry policy', 'stored readable title');
+ const marks = [...doc().querySelectorAll('.diff mark')].map(node=>node.textContent).join('');
+ assert(marks.includes('10') && marks.includes('20'), 'changed values highlighted');
+ assert(!marks.includes('shared resource') && !marks.includes('café'), 'reflow retains unhighlighted phrases');
+ assert(doc().querySelector('.diff-line p').textContent === REFLOW.body_change.before.preview, 'Unicode before text preserved');
+ assert(doc().querySelector('.diff-after p').textContent === REFLOW.body_change.after.preview, 'Unicode after text preserved');
+ const invalidRanges = JSON.parse(JSON.stringify(REFLOW));
+ invalidRanges.body_change.after.changed_ranges = [[-1, 999999]];
+ await result({knowledge_change:invalidRanges}); el('toggle').click(); await wait();
+ assert(el('headline').textContent === 'Note updated', 'invalid highlight ranges fall back');
  const malicious = JSON.parse(JSON.stringify(CHANGE));
  malicious.after.identifier = '<img src=x onerror="window.pwned=true">';
  malicious.body_change.replacements[0].after.preview = '<script>window.pwned=true<\/script>';
@@ -113,7 +129,7 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
 '''
         script = ('const CHANGE = ' + json.dumps(change) + '; const UNCHANGED = ' + json.dumps(unchanged)
                   + '; const CLIPPED = ' + json.dumps(clipped) + '; const CLIPPED_GROUP = '
-                  + json.dumps(clipped_group) + ';\n' + script)
+                  + json.dumps(clipped_group) + '; const REFLOW = ' + json.dumps(reflow) + ';\n' + script)
         script += '\nframe.srcdoc = ' + json.dumps(html()) + ';'
         self.run_browser(script)
 

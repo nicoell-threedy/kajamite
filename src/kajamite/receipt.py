@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -12,6 +13,7 @@ SCHEMA_VERSION = 1
 VALUE_PREVIEW_CHARS = 2_000
 CLAIM_DIFF_MAX_LINES = 500
 CLAIM_CONTEXT_CHARS = 80
+INLINE_DIFF_MAX_TOKENS = 1_000
 COVERAGE = "kajamite_operation"
 COVERAGE_NOTICE = (
     "This receipt covers this Kajamite operation only; it does not exclude "
@@ -45,7 +47,33 @@ def _identity(note: dict[str, Any]) -> dict[str, Any]:
     content = note.get("content")
     if not isinstance(content, str):
         raise ValueError("receipt note has no complete content")
-    return {"identifier": _identifier(note), "content_sha256": _sha256(content)}
+    result = {"identifier": _identifier(note), "content_sha256": _sha256(content)}
+    if isinstance(note.get("title"), str) and note["title"].strip():
+        result["title"] = note["title"]
+    return result
+
+
+def _comparison(before: dict[str, Any] | None, after: dict[str, Any] | None) -> dict[str, Any]:
+    """Annotate preview changes with Unicode code-point ranges, without copying text."""
+    pair = {"before": before, "after": after}
+    if before is None or after is None:
+        return pair
+    if before["preview"] == after["preview"]:
+        before["changed_ranges"], after["changed_ranges"] = [], []
+        return pair
+    tokens = [list(re.finditer(r"\w+|\s+|[^\w\s]", item["preview"])) for item in (before, after)]
+    if max(map(len, tokens)) > INLINE_DIFF_MAX_TOKENS:
+        # ponytail: bounded quadratic matching; the renderer retains its broad-span fallback.
+        return pair
+    before["changed_ranges"], after["changed_ranges"] = [], []
+    for tag, a, b, c, d in SequenceMatcher(None, [m.group() for m in tokens[0]],
+                                         [m.group() for m in tokens[1]], autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        for item, matches, start, end in ((before, tokens[0], a, b), (after, tokens[1], c, d)):
+            if start != end:
+                item["changed_ranges"].append([matches[start].start(), matches[end - 1].end()])
+    return pair
 
 
 def _metadata(note: dict[str, Any]) -> dict[str, Any]:
@@ -148,8 +176,7 @@ def for_edit(
     if find_text is not None:
         body_change = {
             "kind": "exact_replacement",
-            "before": _value(find_text),
-            "after": _value(replacement),
+            **_comparison(_value(find_text), _value(replacement)),
         }
     return _base(
         "edit", before, after,
@@ -169,7 +196,7 @@ def for_revise(
         body_change={
             "kind": "grouped_exact_replacement",
             "replacements": [
-                {"before": _value(item["find_text"]), "after": _value(item["replacement"])}
+                _comparison(_value(item["find_text"]), _value(item["replacement"]))
                 for item in replacements
             ],
         },
@@ -185,7 +212,7 @@ def changed_claim_passages(before: str, after: str) -> dict[str, Any]:
     old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
     if max(len(old_lines), len(new_lines)) > CLAIM_DIFF_MAX_LINES:
         # ponytail: bounded quadratic line matching; use a larger-document diff only if passage previews need it.
-        return {"kind": "exact_replacement", "before": _value(before), "after": _value(after)}
+        return {"kind": "exact_replacement", **_comparison(_value(before), _value(after))}
 
     passages = []
     for tag, old_start, old_end, new_start, new_end in SequenceMatcher(
@@ -214,7 +241,7 @@ def changed_claim_passages(before: str, after: str) -> dict[str, Any]:
             result["truncated"] = left > 0 or right < len(value) or len(preview) < len(value)
             return result
 
-        passages.append({"before": evidence(old), "after": evidence(new)})
+        passages.append(_comparison(evidence(old), evidence(new)))
     return {"kind": "grouped_exact_replacement", "replacements": passages}
 
 

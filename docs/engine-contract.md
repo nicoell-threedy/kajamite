@@ -88,6 +88,14 @@ retaining the full passage length and hash and marking the preview truncated.
 For claims over 500 lines on either side, the receipt uses the bounded
 whole-body preview. Broad replacements can still truncate at 2,000 characters.
 This passage extraction applies only to governed complete-claim revisions.
+Replacement previews may include `changed_ranges`: ordered, non-overlapping
+`[start, end]` Unicode code-point offsets into that exact preview, with an
+exclusive end. Word, punctuation, and whitespace comparison preserves retained
+phrases across reflow without copying the prose again. Matching is limited to
+1,000 tokens per side; larger comparisons omit the ranges and use broad-span
+highlighting. The ranges describe preview text, not omitted note content.
+Receipt identities include the stored note title when available. Titles are
+display labels; identifiers remain the addresses for subsequent operations.
 The replacements use the same one-to-100 exact, unique, disjoint selection rules
 against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.

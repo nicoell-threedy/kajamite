@@ -5,11 +5,14 @@ export type Entry = {
   truncated?: boolean;
   before?: string;
   after?: string;
+  beforeRanges?: [number, number][];
+  afterRanges?: [number, number][];
   message?: string;
 };
 export type View = {
   headline: string;
   subject: string;
+  subjectTitle: string;
   counts: string;
   status: string;
   scope: string;
@@ -60,6 +63,8 @@ const receiptEntries = (receipt: any) => {
           truncated: item.before?.truncated || item.after?.truncated,
           before: valueText(item.before),
           after: valueText(item.after),
+          beforeRanges: item.before?.changed_ranges,
+          afterRanges: item.after?.changed_ranges,
         });
     }
   } else if (body && body.before?.sha256 !== body.after?.sha256) {
@@ -75,6 +80,8 @@ const receiptEntries = (receipt: any) => {
       truncated: body.before?.truncated || body.after?.truncated,
       before: valueText(body.before),
       after: valueText(body.after),
+      beforeRanges: body.before?.changed_ranges,
+      afterRanges: body.after?.changed_ranges,
     });
   }
   for (const entry of result) {
@@ -119,6 +126,7 @@ export function describe(output: any = {}, isError = false): View {
   const view: View = {
     headline: "",
     subject: "",
+    subjectTitle: "",
     counts: "",
     status: "",
     scope:
@@ -168,6 +176,7 @@ export function describe(output: any = {}, isError = false): View {
           : "No content changes";
       view.subject =
         receipt.after?.identifier ?? receipt.before?.identifier ?? "";
+      view.subjectTitle = receipt.after?.title ?? receipt.before?.title ?? "";
       entries = receiptEntries(receipt);
       const n = receipt.affected_notes;
       const count =
@@ -235,6 +244,7 @@ export function describe(output: any = {}, isError = false): View {
   for (const key of [
     "headline",
     "subject",
+    "subjectTitle",
     "counts",
     "status",
     "scope",

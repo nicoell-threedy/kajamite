@@ -56,13 +56,17 @@ async def run(config):
         assert (await engine.read(identifier, request_scope={'system': 'other'}))['withheld']
         note = await engine.create('Preference', 'Prefer the morning session.', 'Notes', kind='preference')
         assert (await engine.read(note['note']['identifier']))['review_status'] == 'unreviewed'
+        assert note['knowledge_change']['after']['title'] == 'Preference'
         body_record = await engine.record_create('BodyEdits', make_record('body-change'))
         revised = await engine.record_transition(body_record['identifier'], 'revise', 1, 'body-edit',
             '2026-01-01T00:00:01.000000Z', 'reviewer', 'Correct claim text',
-            {'claim': 'A corrected synthetic claim.'})
+            {'claim': 'The service\nuses port 9090.\n'})
         assert revised['committed_revision'] == 2
-        assert revised['record']['claim'] == 'A corrected synthetic claim.'
+        assert revised['record']['claim'] == 'The service\nuses port 9090.\n'
         assert revised['record']['events'][0] == body_record['record']['events'][0]
+        pair = revised['knowledge_change']['body_change']['replacements'][0]
+        marked = [''.join(pair[side]['preview'][a:b] for a, b in pair[side]['changed_ranges']) for side in ('before', 'after')]
+        assert ''.join(marked[0].split()) == '8080' and ''.join(marked[1].split()) == '9090'
         fields = {field['key']: field for field in revised['knowledge_change']['record_changes']}
         assert fields['status']['after'] == 'needs_revalidation'
         assert 'events' not in fields and 'claim' not in fields
@@ -147,7 +151,7 @@ async def run(config):
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
-        'mixed inspection prose budget']}
+        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles']}
 
 
 def main():

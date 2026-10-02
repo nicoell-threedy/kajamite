@@ -377,6 +377,26 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn(passage[side]["preview"], record["claim"])
                     self.assertEqual(hashlib.sha256(passage[side]["preview"].encode()).hexdigest(), passage[side]["sha256"])
 
+    def test_receipt_word_ranges_preserve_reflowed_phrases_and_unicode(self):
+        old = "Keep shared resource 💡 café. Retry after 10 seconds. Retain instance state."
+        new = "# Retry policy\n\n- Keep shared resource 💡 café.\n- Retry after 20 seconds.\n- Retain instance state."
+        before = {"file_path": "facts/stable-id.md", "title": "Resource retry policy", "content": old}
+        after = before | {"content": new}
+        variants = [receipt.for_edit(before, after, find_text=old, replacement=new, metadata_keys=set())["body_change"],
+                    receipt.for_revise(before, after, [{"find_text": old, "replacement": new}])["body_change"]["replacements"][0],
+                    receipt.changed_claim_passages(old, new)["replacements"][0]]
+        for pair in variants:
+            marked = {side: "".join(pair[side]["preview"][a:b] for a, b in pair[side]["changed_ranges"]) for side in ("before", "after")}
+            self.assertEqual("10", "".join(marked["before"].split()))
+            self.assertIn("20", marked["after"])
+            self.assertNotIn("shared resource", marked["after"])
+            self.assertNotIn("café", marked["after"])
+            self.assertEqual(old, pair["before"]["preview"])
+            self.assertEqual(new, pair["after"]["preview"])
+        self.assertEqual("Resource retry policy", receipt.for_create(after)["after"]["title"])
+        dense = receipt.changed_claim_passages("a " * 600, "b " * 600)["replacements"][0]
+        self.assertNotIn("changed_ranges", dense["before"])
+
     async def test_complete_claim_receipt_shows_distant_changes(self):
         original = source_record()
         body = "# Claim\n" + "Stable introduction.\n" * 120 + "First finding.\n" + "Stable context.\n" * 120 + "Second finding.\n"
