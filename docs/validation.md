@@ -1,5 +1,13 @@
 # Validation
 
+## Related-topic completeness diagnostics
+
+Native CI at `b41619a` finds both expected related notes but fails the assertion
+that the result is complete on Linux Python 3.12. Failure output includes the
+returned bundle and native graph responses, preserving the exact assertion and
+avoiding automatic retries. Local governed-engine commissioning and all 103
+source checks pass. These results do not establish the cause of the CI failure.
+
 ## Complete creation snapshots
 
 All 103 source checks pass. Governed creation binds the returned claim with a

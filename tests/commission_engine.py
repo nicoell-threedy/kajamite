@@ -147,13 +147,24 @@ async def run(config):
     assert (await protocol_call(config, 'knowledge_record_transition', supersession))['replayed']
     # A new backend session reads the durable record, rather than process-local state.
     async with connect(settings) as backend:
+        native_contexts = []
+        native_call = backend.call
+
+        async def traced_context(name, arguments):
+            result = await native_call(name, arguments)
+            if name == 'build_context':
+                native_contexts.append({'arguments': arguments, 'result': result})
+            return result
+
+        backend.call = traced_context
         engine = KnowledgeEngine(backend, evidence_checker=lambda record, scope: True)
         linked = await engine.related(leaf['identifier'], namespaces=['Details', 'Overviews'],
             depth=1, max_chars=len(leaf['record']['claim']) + len(overview_record['claim']), mode='inspect')
-        assert {note['identifier'] for note in linked['notes']} == {leaf['identifier'], linked_overview['identifier']}
-        assert not linked['partial'] and not linked['graph']['limited']
+        graph_evidence = {'bundle': linked, 'native_contexts': native_contexts}
+        assert {note['identifier'] for note in linked['notes']} == {leaf['identifier'], linked_overview['identifier']}, graph_evidence
+        assert not linked['partial'] and not linked['graph']['limited'], graph_evidence
         assert all(note['mode'] == 'inspect' and note['reuse_checked'] is False for note in linked['notes'])
-        assert linked['used_chars'] == len(leaf['record']['claim']) + len(overview_record['claim'])
+        assert linked['used_chars'] == len(leaf['record']['claim']) + len(overview_record['claim']), graph_evidence
         narrow = await engine.related(leaf['identifier'], namespaces=['Details'], depth=1, mode='inspect')
         assert [note['identifier'] for note in narrow['notes']] == [leaf['identifier']]
         assert narrow['partial'] and narrow['graph']['excluded_outside_scope'] == 1
