@@ -11,6 +11,15 @@ complete receipts, and returns full history on a separate inspection read.
 Rendered desktop and narrow review retain the same edited passage and audit
 disclosure. Stored history and default responses remain unchanged.
 
+## Native pagination investigation
+
+A Linux Python 3.12 CI run failed the existing native FTS continuation assertion:
+the final scoped page reported exhaustion without returning the seeded target.
+Local full commissioning passes. The cause is not established. Failure output
+includes ordered native page paths, totals, and continuation flags to distinguish
+backend ordering/index changes from adapter filtering. The original pagination
+assertions and acceptance conditions remain unchanged.
+
 ## Plain-text receipt projection
 
 All 99 source checks pass, including preservation of full structured history,
