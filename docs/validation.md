@@ -1,5 +1,13 @@
 # Validation
 
+## Plain-text receipt projection
+
+All 99 source checks pass, including preservation of full structured history,
+legacy metadata fallback, passage hashes, and saved state when the state did not
+change. Native governed-engine commissioning verifies an audit-only update with
+concise text and complete structured audit data. This reduces duplicated response
+text; it does not change stored records or establish a model-token saving.
+
 ## Primary changes and audit information
 
 All 98 source checks pass, including browser coverage for audit-only single and

@@ -297,6 +297,36 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 "reviewer", "Retract",
             )
 
+    async def test_plain_receipt_projects_changes_and_keeps_saved_state_and_raw_audit(self):
+        created = await self.engine.record_create('facts', source_record())
+        changed = await self.engine.record_transition(created['identifier'], 'revise', 1, 'first',
+            '2026-01-01T00:00:01.000000Z', 'reviewer', 'Clarify', {'claim': 'First corrected explanation.'})
+        updated = await self.engine.record_transition(created['identifier'], 'revise', 2, 'second',
+            '2026-01-01T00:00:02.000000Z', 'reviewer', 'Clarify again', {'claim': 'Second corrected explanation.'})
+        self.assertEqual('needs_revalidation', changed['record']['status'])
+        self.assertEqual('needs_revalidation', updated['record']['status'])
+        text = updated['knowledge_change_text']
+        self.assertIn('First corrected explanation.', text)
+        self.assertIn('Second corrected explanation.', text)
+        self.assertIn('Saved record state: needs_revalidation', text)
+        self.assertIn('Committed record revision: 3', text)
+        self.assertNotIn('kajamite_record', text)
+        self.assertNotIn('kajamite_operations', text)
+        self.assertEqual(updated['record'], self.engine.records.validate_record(updated['record']))
+        self.assertEqual(3, len(updated['record']['events']))
+        change = updated['knowledge_change']
+        snapshot = copy.deepcopy(change)
+        rendered = receipt.render(change)
+        self.assertEqual(snapshot, change)
+        self.assertIn('Full record metadata and history', rendered)
+        self.assertIn('SHA-256', rendered)
+        legacy = copy.deepcopy(change)
+        del legacy['record_changes']
+        self.assertIn('Metadata kajamite_record', receipt.render(legacy))
+        status_text = changed['knowledge_change_text']
+        self.assertIn('Record status:', status_text)
+        self.assertIn('needs_revalidation', status_text)
+
     async def test_record_review_omits_rechecks_and_mirrors_but_retains_support_changes(self):
         original = source_record()
         claim = 'An existing explanation.'

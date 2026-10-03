@@ -81,6 +81,10 @@ async def run(config):
             verification['verified_at'], 'reviewer', 'Recheck unchanged evidence',
             {'evidence': evidence, 'verification': verification})
         assert refreshed['knowledge_change']['record_changes'] == []
+        assert 'Audit information updated; note text unchanged.' in refreshed['knowledge_change_text']
+        assert 'kajamite_record' not in refreshed['knowledge_change_text']
+        assert 'Saved record state: supported' in refreshed['knowledge_change_text']
+        assert refreshed['knowledge_change']['metadata_changes']
         assert refreshed['record']['evidence'] == evidence and refreshed['record']['verification'] == verification
         assert refreshed['record']['events'][0] == current['events'][0]
         assert (await engine.read(audited['identifier'], request_scope=SCOPE))['content'] == current['claim']
@@ -165,7 +169,7 @@ async def run(config):
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
-        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention']}
+        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention', 'compact plain receipt with full structured audit']}
 
 
 def main():

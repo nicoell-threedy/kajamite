@@ -107,6 +107,10 @@ reference changes, evidence additions/removals, independent observation text,
 and changed support bindings remain reviewable. A source-reference update does
 not by itself establish that source behavior changed. Audit-only saves remain
 explicit in both single-note and batch summaries.
+The plain-text fallback uses these semantic rows when present instead of printing
+the complete journal again. It retains passage hashes, coverage, saved record
+state, and committed revision. Full structured records and receipt metadata stay
+unchanged; legacy receipts without semantic rows retain their metadata fallback.
 The replacements use the same one-to-100 exact, unique, disjoint selection rules
 against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.

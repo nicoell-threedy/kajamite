@@ -498,7 +498,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                                   "committed_revision": record["record_revision"], "replayed": replayed}
         if change is not None:
             change["record_revision"] = record["record_revision"]
-            result.update(knowledge_change=change, knowledge_change_text=receipt.render(change) + "\nCommitted record revision: " + str(record["record_revision"]))
+            result.update(knowledge_change=change, knowledge_change_text=receipt.render(change)
+                          + "\nSaved record state: " + record["status"]
+                          + "\nCommitted record revision: " + str(record["record_revision"]))
         return result
 
     async def read(self, identifier: str, offset: int = 0, limit: int = 12_000, *,

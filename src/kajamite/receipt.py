@@ -325,7 +325,16 @@ def render(receipt: dict[str, Any]) -> str:
                 suffix = " (preview; truncated)" if evidence["truncated"] else ""
                 lines.append(f"{label}{suffix}: {evidence['preview']!r}")
                 lines.append(f"{label} SHA-256: {evidence['sha256']}")
-    for change in receipt.get("metadata_changes", []):
+    projected = isinstance(receipt.get("record_changes"), list)
+    changes = [("Metadata", change) for change in receipt.get("metadata_changes", [])
+               if change["key"] not in {"record_revision", "kajamite_operations"}
+               and not (projected and change["key"] == "kajamite_record")]
+    if projected:
+        changes.extend(("Record", change) for change in receipt["record_changes"])
+    for label, change in changes:
+        if "message" in change:
+            lines.append(f"{label} {change['key']}: {change['message']}")
+            continue
         before_value = (
             json.dumps(change["before"], ensure_ascii=False, sort_keys=True)
             if change.get("before_present", True) else "<absent>"
@@ -335,7 +344,11 @@ def render(receipt: dict[str, Any]) -> str:
             if change.get("after_present", True) else "<absent>"
         )
         lines.append(
-            f"Metadata {change['key']}: {before_value} -> {after_value}"
+            f"{label} {change['key']}: {before_value} -> {after_value}"
         )
+    if projected:
+        if not changes and receipt.get("metadata_changes") and before.get("content_sha256") == after.get("content_sha256"):
+            lines.append("Audit information updated; note text unchanged.")
+        lines.append("Full record metadata and history remain in the structured result.")
     lines.append(receipt["coverage_notice"])
     return "\n".join(lines)
