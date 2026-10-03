@@ -35,7 +35,7 @@ statement equal to its snapshot claim uses `{"from_claim": true}`. Other values,
 including source and evidence fields, remain unchanged. Decoding restores complete
 event snapshots and the current projection, then validates the full record.
 Legacy complete-record metadata remains readable and is written as `journal-v1`
-on its next transition. Record results retain the complete record contract.
+on its next transition. Record results retain the complete record contract by default.
 Readers before version 0.7 cannot read journal metadata. Upgrade all readers of
 a shared store before enabling writes from this version. Retain a store backup
 before rollout; reverting the package alone does not revert written notes.
@@ -123,6 +123,22 @@ acyclic-dependency requirements. The complete successor object remains supported
 for compatibility. Compact references avoid copying a second record and its history.
 A rejected reference leaves the original unchanged. Replays resolve by the original
 request fingerprint before checking the successor again.
+
+## Compact mutation results
+
+Record creation and transitions accept `include_history=false` to omit only
+`record.events` from the returned projection and set `history_included=false`.
+The current claim, evidence, scope, verification, status, and committed revision
+remain present. The complete operation receipt, its raw audit metadata, and its
+plain-text rendering remain unchanged. This reduces response duplication; it
+changes neither stored history nor the receipt's audit coverage.
+The compact record is a current projection, not a portable complete record.
+Use `knowledge_read(identifier, mode="inspect")` for validated full history.
+A later read can include subsequent revisions; compare its revision with the
+mutation's `committed_revision` before treating it as that same snapshot.
+The Boolean option is validated before mutation and is not part of replay
+identity. Switching the response view on a retry never authorizes another write.
+Default responses and conflict, uncertain-write, and readback checks are unchanged.
 
 ## Retrieval
 

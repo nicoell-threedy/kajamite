@@ -191,6 +191,7 @@ A status field alone does not establish verified support.
 
 Use knowledge_record_create for a claim with explicit evidence, scope, and verification.
 Use knowledge_record_transition with the current expected revision and a unique operation ID.
+For creation or transitions, use include_history=false when only current fields and the change receipt are needed. This omits response snapshots, not stored history. Inspect the returned identifier for full history; check its revision against committed_revision because later writes can advance it.
 For a focused governed revision, use action="revise" and changes.replacements with
 objects containing find_text and replacement. Do not also supply changes.claim.
 Selections apply to the original body and must be unique and disjoint. Unselected

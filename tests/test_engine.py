@@ -48,6 +48,44 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_compact_mutations_preserve_receipts_history_and_replay(self):
+        for invalid in (None, 0, "false"):
+            with self.assertRaisesRegex(ValueError, "include_history"):
+                await self.engine.record_create("facts", source_record(), include_history=invalid)
+            with self.assertRaisesRegex(ValueError, "include_history"):
+                await self.engine.record_transition("facts/missing.md", "dispute", 1, "bad",
+                    STAMP, "reviewer", "Check", include_history=invalid)
+        self.assertEqual({}, self.backend.notes)
+        created = await self.engine.record_create("facts", source_record(), include_history=False)
+        self.assertIs(created["history_included"], False)
+        self.assertNotIn("events", created["record"])
+        full = await self.engine.read(created["identifier"], mode="inspect")
+        self.assertEqual(source_record(), full["record"])
+        args = (created["identifier"], "dispute", 1, "disputed",
+                "2026-01-01T00:00:01.000000Z", "reviewer", "Conflicting evidence")
+        changed = await self.engine.record_transition(*args, include_history=False)
+        record = (await self.engine.read(created["identifier"], mode="inspect"))["record"]
+        self.assertEqual({k: v for k, v in record.items() if k != "events"}, changed["record"])
+        self.assertEqual("disputed", changed["record"]["status"])
+        self.assertEqual(2, len(record["events"]))
+        complete = self.engine._record_result(changed["mutation"], {"file_path": created["identifier"]},
+            record, copy.deepcopy(changed["knowledge_change"]), replayed=False)
+        for key in ("knowledge_change", "knowledge_change_text", "committed_revision", "replayed"):
+            self.assertEqual(complete[key], changed[key])
+        stored = copy.deepcopy(self.backend.notes)
+        replay = await self.engine.record_transition(*args)
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(record, replay["record"])
+        self.assertNotIn("history_included", replay)
+        compact_replay = await self.engine.record_transition(*args, include_history=False)
+        self.assertTrue(compact_replay["replayed"])
+        self.assertEqual(2, compact_replay["operation_revision"])
+        self.assertEqual(changed["record"], compact_replay["record"])
+        with self.assertRaisesRegex(KnowledgeError, "revision conflict"):
+            await self.engine.record_transition(created["identifier"], "dispute", 1, "stale",
+                STAMP, "reviewer", "Stale revision", include_history=False)
+        self.assertEqual(stored, self.backend.notes)
+
     async def test_governed_heading_is_a_display_title_without_changing_identity(self):
         original = source_record()
         record = self.engine.records.create_record('stable-id', '# Resource retry policy\n\n' + original['claim'],
@@ -220,9 +258,11 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         unchanged = await self.engine.record_transition(
             created["identifier"], "evidence_health", 1, "health-1",
             "2026-01-01T00:00:00.000001Z", "reviewer", "Source unavailable",
-            {"outcome": "inaccessible", "condition_id": "source-check"},
+            {"outcome": "inaccessible", "condition_id": "source-check"}, include_history=False,
         )
         self.assertFalse(unchanged["mutated"])
+        self.assertFalse(unchanged["history_included"])
+        self.assertNotIn("events", unchanged["record"])
         self.assertTrue(unchanged["transient"])
         self.assertEqual(calls + 1, len(self.backend.calls))  # The current record was read, not written.
 

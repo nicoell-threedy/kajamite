@@ -241,7 +241,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 page += 1
         return records
 
-    async def record_create(self, namespace: str, record: Mapping[str, Any]) -> dict[str, Any]:
+    async def record_create(self, namespace: str, record: Mapping[str, Any], *, include_history: bool = True) -> dict[str, Any]:
+        if type(include_history) is not bool:
+            raise ValueError("include_history must be a bool")
         try:
             value = self.records.validate_record(record)
         except RecordError as error:
@@ -272,12 +274,15 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 raise MutationUncertain("Record create readback did not match; a write may have committed. Inspect current state before retrying.")
             change = receipt.for_create(after)
             change["record_changes"] = receipt.record_changes({}, persisted)
-            return self._record_result(result, after, persisted, change, replayed=False)
+            return self._record_result(result, after, persisted, change, replayed=False, include_history=include_history)
 
     async def record_transition(
         self, identifier: str, action: str, expected_revision: int, operation_id: str,
         timestamp: str, actor: str, reason: str, changes: Mapping[str, Any] | None = None,
+        *, include_history: bool = True,
     ) -> dict[str, Any]:
+        if type(include_history) is not bool:
+            raise ValueError("include_history must be a bool")
         if not isinstance(expected_revision, int) or isinstance(expected_revision, bool) or expected_revision < 1:
             raise ValueError("expected_revision must be a positive integer")
         if not isinstance(operation_id, str) or not operation_id:
@@ -296,13 +301,13 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if prior is not None:
                 if prior.get("fingerprint") != fingerprint:
                     raise KnowledgeError("operation ID was already used with different inputs")
-                return self._record_result(None, before, record, None, replayed=True) | {"operation_revision": prior.get("committed_revision")}
+                return self._record_result(None, before, record, None, replayed=True, include_history=include_history) | {"operation_revision": prior.get("committed_revision")}
             if record["record_revision"] != expected_revision:
                 raise KnowledgeError("record revision conflict; read the current record before retrying")
             if action == "evidence_health":
                 health = self._evidence_health(record, timestamp, actor, reason, changes)
                 if not health["mutated"]:
-                    result = self._record_result(None, before, record, None, replayed=False)
+                    result = self._record_result(None, before, record, None, replayed=False, include_history=include_history)
                     result.update(outcome=health["outcome"], mutated=False, transient=health["transient"])
                     return result
             transition_changes = dict(changes or {})
@@ -363,7 +368,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     else receipt.changed_claim_passages(record["claim"], updated["claim"])
                 )
             change["record_changes"] = receipt.record_changes(record, persisted)
-            return self._record_result(result, after, persisted, change, replayed=False)
+            return self._record_result(result, after, persisted, change, replayed=False, include_history=include_history)
 
     def _transition(self, record: Mapping[str, Any], action: str, timestamp: str, actor: str,
                     reason: str, operation_id: str, changes: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -492,10 +497,13 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             record["events"][-1]["snapshot"]["verification"] = copy.deepcopy(record["verification"])
 
     def _record_result(self, mutation: Any, note: Mapping[str, Any], record: Mapping[str, Any],
-                       change: dict[str, Any] | None, *, replayed: bool) -> dict[str, Any]:
+                       change: dict[str, Any] | None, *, replayed: bool, include_history: bool = True) -> dict[str, Any]:
         result: dict[str, Any] = {"mutation": mutation, "record": copy.deepcopy(record),
                                   "identifier": self._identifier(dict(note)),
                                   "committed_revision": record["record_revision"], "replayed": replayed}
+        if not include_history:
+            result["record"].pop("events", None)
+            result["history_included"] = False
         if change is not None:
             change["record_revision"] = record["record_revision"]
             result.update(knowledge_change=change, knowledge_change_text=receipt.render(change)

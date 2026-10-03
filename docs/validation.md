@@ -1,5 +1,16 @@
 # Validation
 
+## Compact mutation projection
+
+All 100 source checks pass, including three Chromium checks. The focused engine
+checks cover compact creation, transitions, transient no-write outcomes, invalid
+option rejection before mutation, stale revisions, and replay across response
+views. Full native commissioning passes through the public backend and MCP.
+The native protocol advertises a Boolean option with a true default, preserves
+complete receipts, and returns full history on a separate inspection read.
+Rendered desktop and narrow review retain the same edited passage and audit
+disclosure. Stored history and default responses remain unchanged.
+
 ## Plain-text receipt projection
 
 All 99 source checks pass, including preservation of full structured history,

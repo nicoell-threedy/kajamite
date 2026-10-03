@@ -39,6 +39,10 @@ async def protocol_call(config, name, arguments):
             tools = await session.list_tools()
             schema = next(tool.input_schema for tool in tools.tools if tool.name == 'knowledge_search')
             assert 'namespaces' in schema.get('properties', {})
+            for tool_name in ('knowledge_record_create', 'knowledge_record_transition'):
+                compact_schema = next(tool.input_schema for tool in tools.tools if tool.name == tool_name)
+                assert compact_schema['properties']['include_history']['type'] == 'boolean'
+                assert compact_schema['properties']['include_history']['default'] is True
             assert schema['properties']['retrieval_mode']['enum'] == ['text', 'semantic', 'hybrid']
             assert 'args' not in schema.get('properties', {}) and 'kwargs' not in schema.get('properties', {})
             return unpack(await session.call_tool(name, arguments))
@@ -90,6 +94,20 @@ async def run(config):
         assert (await engine.read(audited['identifier'], request_scope=SCOPE))['content'] == current['claim']
         older = await engine.record_create('Successions', make_record('older'))
         successor = await engine.record_create('Successions', make_record('successor'))
+    compact = await protocol_call(config, 'knowledge_record_create', {
+        'namespace': 'Compact', 'record': make_record('compact-result'), 'include_history': False})
+    assert compact['history_included'] is False and 'events' not in compact['record']
+    compact_args = {'identifier': compact['identifier'], 'action': 'dispute', 'expected_revision': 1,
+        'operation_id': 'compact-dispute', 'timestamp': '2026-01-01T00:00:01.000000Z',
+        'actor': 'reviewer', 'reason': 'Conflicting evidence'}
+    compact_change = await protocol_call(config, 'knowledge_record_transition', compact_args | {'include_history': False})
+    assert compact_change['record']['status'] == 'disputed' and 'events' not in compact_change['record']
+    assert any(row['key'] == 'kajamite_record' for row in compact_change['knowledge_change']['metadata_changes'])
+    compact_replay = await protocol_call(config, 'knowledge_record_transition', compact_args)
+    assert compact_replay['replayed'] and compact_replay['operation_revision'] == 2
+    compact_full = await protocol_call(config, 'knowledge_read', {'identifier': compact['identifier'], 'mode': 'inspect'})
+    assert len(compact_full['record']['events']) == 2 and compact_full['record'] == compact_replay['record']
+    assert {k: v for k, v in compact_full['record'].items() if k != 'events'} == compact_change['record']
     supersession = {
         'identifier': older['identifier'], 'action': 'supersede', 'expected_revision': 1,
         'operation_id': 'compact-supersession', 'timestamp': '2026-01-01T00:00:01.000000Z',
@@ -169,7 +187,7 @@ async def run(config):
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
-        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention', 'compact plain receipt with full structured audit']}
+        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention', 'compact plain receipt with full structured audit', 'compact mutation projection and full audit readback']}
 
 
 def main():
