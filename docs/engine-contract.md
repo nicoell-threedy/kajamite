@@ -228,3 +228,11 @@ the closing frontmatter delimiter and complete current body. Claim text repeated
 record history therefore remains unchanged. Generic note edits use the same path.
 This costs one additional read before a body edit. The existing mutation lock and
 post-write readback remain in effect; unrelated writers still require reconciliation.
+
+Evidence replacement in `record_transition(action="revise")` uses an object keyed
+by evidence ID. Existing observation references must remain present, or the same
+revision must update observations to reference the replacement IDs. Review observation
+statements for consistency with the revised claim; valid references alone do not
+establish semantic support. Invalid shapes
+and dangling observation references return actionable errors before any write;
+errors do not expose the record's identifiers or evidence values.

@@ -1,5 +1,14 @@
 # Validation
 
+## Evidence revision diagnostics
+
+All 101 source checks pass. Invalid evidence lists and dangling observation
+references return specific, value-free diagnostics before mutation. The native
+backend check confirms that rejected revisions leave the complete note unchanged.
+Tool guidance distinguishes evidence-ID validity from observation statement support;
+this does not establish that an autonomous author keeps every intermediate revision
+semantically consistent.
+
 ## Related-topic orientation
 
 All 100 source checks pass. Native governed-engine commissioning confirms that

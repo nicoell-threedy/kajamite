@@ -376,6 +376,8 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         event = {"timestamp": timestamp, "actor": actor, "reason": reason, "event_id": operation_id}
         try:
             if action == "revise":
+                if changes.get("evidence") is not None and not isinstance(changes["evidence"], Mapping):
+                    raise KnowledgeError("changes.evidence must be an object keyed by evidence ID")
                 return self.records.revise(record, **changes, **event)
             if action == "dispute":
                 if changes:
@@ -399,6 +401,8 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 return self._evidence_health(record, timestamp, actor, reason, changes)["record"]
         except (RecordError, KeyError, TypeError) as error:
             detail = str(error)
+            if isinstance(error, RecordError) and detail.startswith("observation ") and " references unknown evidence: " in detail:
+                raise KnowledgeError("observations reference unknown evidence IDs; preserve referenced IDs or update observations with the evidence mapping") from error
             if isinstance(error, RecordError) and detail in {
                 "event timestamp must use canonical UTC microseconds",
                 "verification.verified_at must be non-empty text",

@@ -12,6 +12,7 @@ from kajamite.backend import connect, unpack
 from kajamite.config import Settings
 from kajamite.engine import KnowledgeEngine
 from kajamite.governance import RecordEngine
+from kajamite.service import KnowledgeError
 from mcp import ClientSession, StdioServerParameters
 import kajamite
 from mcp.client.stdio import stdio_client
@@ -58,6 +59,20 @@ async def run(config):
         assert (await engine.read(identifier, request_scope=SCOPE))['content'] == make_record()['claim']
         assert (await engine.read(identifier.removesuffix('.md'), request_scope=SCOPE))['content'] == make_record()['claim']
         assert (await engine.read(identifier, request_scope={'system': 'other'}))['withheld']
+        before = await engine.read(identifier, mode='inspect')
+        anchor = make_record()['evidence']['manual']
+        for evidence, message in [
+            ([anchor], 'changes.evidence must be an object keyed by evidence ID'),
+            ({'replacement': anchor}, 'observations reference unknown evidence IDs; preserve referenced IDs or update observations with the evidence mapping'),
+        ]:
+            try:
+                await engine.record_transition(identifier, 'revise', 1, 'invalid-evidence',
+                    '2026-01-01T00:00:01.000000Z', 'reviewer', 'Update support', {'evidence': evidence})
+            except KnowledgeError as error:
+                assert str(error) == message
+            else:
+                raise AssertionError('Invalid evidence must fail before mutation')
+            assert (await engine.read(identifier, mode='inspect')) == before
         note = await engine.create('Preference', 'Prefer the morning session.', 'Notes', kind='preference')
         assert (await engine.read(note['note']['identifier']))['review_status'] == 'unreviewed'
         assert note['knowledge_change']['after']['title'] == 'Preference'

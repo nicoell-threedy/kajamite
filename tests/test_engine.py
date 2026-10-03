@@ -443,6 +443,21 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
                 await self.engine.record_transition(identifier, "revise", 1, "opaque",
                     "2026-01-01T00:00:01.000000Z", "reviewer", "Clarify", {"claim": "Clarified claim."})
 
+    async def test_transition_explains_evidence_shape_and_binding_without_mutation(self):
+        created = await self.engine.record_create("facts", source_record())
+        identifier = created["identifier"]
+        before = copy.deepcopy(self.backend.notes[identifier])
+        anchor = source_record()["evidence"]["source"]
+        for evidence, message in [
+            ([anchor], "changes.evidence must be an object keyed by evidence ID"),
+            ({"replacement": anchor}, "observations reference unknown evidence IDs; preserve referenced IDs or update observations with the evidence mapping"),
+        ]:
+            with self.subTest(evidence=evidence), self.assertRaises(KnowledgeError) as error:
+                await self.engine.record_transition(identifier, "revise", 1, "invalid-evidence",
+                    "2026-01-01T00:00:01.000000Z", "reviewer", "Update support", {"evidence": evidence})
+            self.assertEqual(message, str(error.exception))
+            self.assertEqual(before, self.backend.notes[identifier])
+
     async def test_governed_revise_replaces_disjoint_passages_and_preserves_history(self):
         original = source_record()
         body = "# Claim\n\n" + "Unchanged introduction.\n" * 150 + "First finding.\n\n" + "Unchanged context.\n" * 150 + "| Name | Value |\n| ---- | ----- |\n| Ada  | 8     |\n\nLast line.\n"
