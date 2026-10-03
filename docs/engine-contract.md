@@ -150,6 +150,9 @@ The engine checks current knowledge before returning governed content.
 Observation categories and typed relations come from Basic Memory.
 Graph expansion uses physical paths and explicit namespace bounds.
 Related reads include the starting note and can follow incoming links.
+Discovery follows at most five native primary pages, deduplicating note paths.
+The result remains partial when page, note, or related-result limits are reached.
+Continuation errors propagate; an incomplete read is not reported as complete.
 Use the root namespace only when the task permits context across the base.
 Narrower namespace filters can exclude linked topics; the result reports their
 count and marks the bundle partial without broadening the request.

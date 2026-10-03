@@ -1,5 +1,15 @@
 # Validation
 
+## Graph continuation
+
+Native CI at `cca6d58` returns the expected linked notes but advertises another
+primary page. Related discovery follows bounded primary pagination and preserves
+partial flags for page, note, related-result, and namespace limits. Synthetic
+checks cover later neighbors, repeated paths, exhaustion, scope exclusions, and
+continuation failure. All 107 source checks and all three native commissioning
+phases pass. The native acceptance assertion
+is unchanged; the cause of the backend's additional primary result remains open.
+
 ## Creation summaries
 
 New-note summaries count affected notes without describing initialized metadata as

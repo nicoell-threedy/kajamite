@@ -443,27 +443,39 @@ class NoteOperations:
         seed = await self._read_full(identifier)
         if not self._in_scopes(self._identifier(seed), scopes, True):
             raise ValueError("the starting note is outside the requested namespaces")
-        native = await self.backend.call("build_context", {
-            "url": seed.get("permalink") or identifier, "depth": depth,
-            "timeframe": None, "page": 1, "page_size": 1, "max_related": 100,
-        })
-        selected = [self._identifier(seed)]
-        excluded = 0
-        for result in native.get("results", []):
-            for item in [result.get("primary_result", {}), *result.get("related_results", [])]:
-                path = item.get("file_path")
-                if not isinstance(path, str) or item.get("type") != "entity":
-                    continue
-                if not self._in_scopes(path, scopes, True):
-                    excluded += 1
-                elif path not in selected:
-                    selected.append(path)
-        limited = len(selected) > max_notes or bool(native.get("has_more")) or native.get("metadata", {}).get("related_count", 0) >= 100
+        selected, excluded, limited = await self._related_paths(seed, identifier, scopes, depth, max_notes)
         bundle = await self.context(identifiers=selected[:max_notes], max_chars=max_chars)
         return bundle | {"graph": {"depth": depth, "selected_notes": len(selected[:max_notes]),
                                    "excluded_outside_scope": excluded, "limited": limited,
                                    "source": "basic_memory_relations"},
                          "partial": bool(bundle["partial"] or limited or excluded)}
+
+    async def _related_paths(self, seed, identifier, scopes, depth, max_notes):
+        """Follow bounded primary pagination without hiding related-result limits."""
+        selected, excluded, limited = [self._identifier(seed)], set(), False
+        for page in range(1, 6):
+            native = await self.backend.call("build_context", {
+                "url": seed.get("permalink") or identifier, "depth": depth,
+                "timeframe": None, "page": page, "page_size": 1, "max_related": 100,
+            })
+            limited |= native.get("metadata", {}).get("related_count", 0) >= 100
+            for result in native.get("results", []):
+                for item in [result.get("primary_result", {}), *result.get("related_results", [])]:
+                    path = item.get("file_path")
+                    if not isinstance(path, str) or item.get("type") != "entity":
+                        continue
+                    if not self._in_scopes(path, scopes, True):
+                        excluded.add(path)
+                    elif path not in selected:
+                        selected.append(path)
+            if len(selected) > max_notes:
+                limited = True
+                break
+            if not native.get("has_more"):
+                break
+        else:
+            limited = True
+        return selected, len(excluded), limited
 
     async def move(
         self, identifier: str, destination: str, is_namespace: bool = False
