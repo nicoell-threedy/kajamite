@@ -176,8 +176,10 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(el('headline').textContent === 'No content changes' && el('counts').textContent.includes('0 changes'), 'no-op');
  await result({knowledge_change:CREATED});
  assert(el('overview').textContent.includes('New reader-facing explanation.') && !el('overview').textContent.includes('generated-id'), 'creation summary leads with prose');
+ assert(el('counts').textContent==='1 note' && !el('overview').textContent.includes('field update'), 'creation does not describe initialization as edits');
  el('toggle').click(); await wait();
  assert(el('changes').children.length === 1 && el('note-fields').hidden && el('more').hidden, 'creation fields are secondary');
+ assert(el('fields-toggle').textContent.includes('Initial note fields'), 'creation field disclosure identifies initialization');
  el('fields-toggle').click(); await wait();
  assert(el('note-fields').textContent.includes('generated-id') && el('note-fields').textContent.includes('notes/new-note'), 'all initialized fields remain inspectable');
  await result({knowledge_change:CREATED}); el('toggle').click(); await wait();

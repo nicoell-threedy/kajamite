@@ -1,5 +1,14 @@
 # Validation
 
+## Creation summaries
+
+New-note summaries count affected notes without describing initialized metadata as
+field updates or the new body as a text edit. Saved content leads the overview;
+initial note fields remain available in their own disclosure. Existing-edit counts
+and comparisons are unchanged. All 104 source checks and frontend build checks
+pass. Shared-host desktop and 320px inspection confirms the content-first view and
+field disclosure. Installed-client acceptance remains separate.
+
 ## Cross-process lock coordination
 
 The contention test holds the subprocess lock until an explicit release event.

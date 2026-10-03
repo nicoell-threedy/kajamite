@@ -316,7 +316,10 @@ export function describe(output: any = {}, isError = false): View {
         receipt.affected_notes_exact && Number.isInteger(n)
           ? noun(n, "note")
           : "Note count not reported";
-      view.counts = `${count} · ${changeCounts(entries)}`;
+      view.counts =
+        receipt.operation === "create"
+          ? count
+          : `${count} · ${changeCounts(entries)}`;
       view.status = receipt.readback_verified
         ? "Saved result checked"
         : "Backend confirmed";

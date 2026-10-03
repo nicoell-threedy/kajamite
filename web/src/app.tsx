@@ -311,7 +311,7 @@ function App() {
     .filter((item) => item.kind !== "message")
     .slice(0, batch ? 3 : 2);
   const errors = view.entries.filter((item) => item.kind === "message");
-  const remaining = view.entries.filter(
+  const remaining = primary.filter(
     (item) => item.kind !== "message" && !overview.includes(item),
   );
   useEffect(() => {
@@ -439,7 +439,7 @@ function App() {
                   <Collapsible key={`fields-${state.generation}`}>
                     <CollapsibleTrigger asChild>
                       <Button id="fields-toggle" variant="secondary" size="sm">
-                        Note fields ({fields.length})
+                        Initial note fields ({fields.length})
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent
