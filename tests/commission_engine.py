@@ -92,6 +92,11 @@ async def run(config):
         assert refreshed['record']['evidence'] == evidence and refreshed['record']['verification'] == verification
         assert refreshed['record']['events'][0] == current['events'][0]
         assert (await engine.read(audited['identifier'], request_scope=SCOPE))['content'] == current['claim']
+        leaf = await engine.record_create('Details', make_record('linked-leaf'))
+        overview_record = make_record('linked-overview')
+        overview_record['claim'] = 'The overview links to [[Details/linked-leaf.md]].\n'
+        overview_record['events'][0]['snapshot']['claim'] = overview_record['claim']
+        linked_overview = await engine.record_create('Overviews', overview_record)
         older = await engine.record_create('Successions', make_record('older'))
         successor = await engine.record_create('Successions', make_record('successor'))
     compact = await protocol_call(config, 'knowledge_record_create', {
@@ -120,6 +125,15 @@ async def run(config):
     # A new backend session reads the durable record, rather than process-local state.
     async with connect(settings) as backend:
         engine = KnowledgeEngine(backend, evidence_checker=lambda record, scope: True)
+        linked = await engine.related(leaf['identifier'], namespaces=['Details', 'Overviews'],
+            depth=1, max_chars=len(leaf['record']['claim']) + len(overview_record['claim']), mode='inspect')
+        assert {note['identifier'] for note in linked['notes']} == {leaf['identifier'], linked_overview['identifier']}
+        assert not linked['partial'] and not linked['graph']['limited']
+        assert all(note['mode'] == 'inspect' and note['reuse_checked'] is False for note in linked['notes'])
+        assert linked['used_chars'] == len(leaf['record']['claim']) + len(overview_record['claim'])
+        narrow = await engine.related(leaf['identifier'], namespaces=['Details'], depth=1, mode='inspect')
+        assert [note['identifier'] for note in narrow['notes']] == [leaf['identifier']]
+        assert narrow['partial'] and narrow['graph']['excluded_outside_scope'] == 1
         persisted = await engine.read(older['identifier'], mode='inspect')
         assert persisted['record'] == superseded['record']
         assert persisted['record']['events'][0] == older['record']['events'][0]
@@ -187,7 +201,7 @@ async def run(config):
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
-        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention', 'compact plain receipt with full structured audit', 'compact mutation projection and full audit readback']}
+        'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention', 'compact plain receipt with full structured audit', 'compact mutation projection and full audit readback', 'incoming governed links within a prose budget']}
 
 
 def main():

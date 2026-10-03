@@ -1,5 +1,15 @@
 # Validation
 
+## Related-topic orientation
+
+All 100 source checks pass. Native governed-engine commissioning confirms that
+a detail note can discover an overview through an incoming link across namespaces.
+Both inspected bodies fit in their exact combined prose budget and remain marked
+`reuse_checked=false`. A narrow namespace returns only the starting topic,
+reports the excluded neighbor, and marks the result partial. Tool descriptions
+explain the starting note, incoming links, and explicit root-scope selection.
+This establishes retrieval behavior, not reliable autonomous tool selection.
+
 ## Compact mutation projection
 
 All 100 source checks pass, including three Chromium checks. The focused engine

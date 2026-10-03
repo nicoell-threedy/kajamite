@@ -149,6 +149,10 @@ The engine checks current knowledge before returning governed content.
 
 Observation categories and typed relations come from Basic Memory.
 Graph expansion uses physical paths and explicit namespace bounds.
+Related reads include the starting note and can follow incoming links.
+Use the root namespace only when the task permits context across the base.
+Narrower namespace filters can exclude linked topics; the result reports their
+count and marks the bundle partial without broadening the request.
 Relation labels alone do not establish evidence dependencies.
 Context limits apply after candidate selection, with explicit omissions.
 
