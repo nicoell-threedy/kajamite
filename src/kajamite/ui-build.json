@@ -7,7 +7,7 @@
     "web/components.json": "63b626306f2a50918a2a3255c505f9ec9e1e0bf1f0de98184f6331133a88d90b",
     "web/package-lock.json": "5eb01f9e03ee9e8e3fc5893b366d6b274ef652797d4283aa4523374a77cdd2aa",
     "web/package.json": "31578ab03da34f9a5a21f06a8f120830d3d815bac5d9849f59d058e10fb9d2c8",
-    "web/src/app.tsx": "62f229b9c76f4820285759799ff6a3ce7e3832a6edbc44e7b138be812f46e55f",
+    "web/src/app.tsx": "e325e3a528ec241f07a1ed1b789dfcb77e23aa037f84cee4305c3b7fb3106227",
     "web/src/bridge.ts": "09e9ea3f30661c9c2b2cfaf28b67d379ae40047653da492a9f6b1a181780bc33",
     "web/src/components/ui/button.tsx": "09a13e6d2f2cea670681dba52a245a5083649a25957554e2f6cade27a80e7edf",
     "web/src/components/ui/card.tsx": "34117e5352d4cc9b49a73546ae39bcd15887f82eedecb13a2414003f35b83db5",
@@ -21,7 +21,7 @@
     "web/tsconfig.json": "40fcc4f603ee7bf5fd6063aed4a8a870e9267082055cd2cf771615b1d16dd9df"
   },
   "outputs": {
-    "src/kajamite/knowledge-change.html": "18633efbeac7dede43f6d729071fbb326590fa1e7521bc9365b5016cd169c632",
+    "src/kajamite/knowledge-change.html": "74686e3dfe6143c85fa68518f60e240e36dc7fd37488bf4eb6a9dd1e98401604",
     "src/kajamite/UI-NOTICES.txt": "f83a3c074933368f144b1a52bcdd3902f2e37d60072368a89277bf48de2a58fc"
   }
 }

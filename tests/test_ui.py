@@ -29,6 +29,8 @@ class UiTests(unittest.TestCase):
         reflow_after = reflow_before | {'content': '# Retry policy\n\n- Keep shared resource 💡 café.\n- Retry after 20 seconds.\n- Retain instance state.'}
         reflow = receipt.for_edit(reflow_before, reflow_after, find_text=reflow_before['content'],
                                  replacement=reflow_after['content'], metadata_keys=set())
+        created = receipt.for_create({'file_path': 'Notes/new-note.md', 'content': 'New reader-facing explanation.',
+                                      'metadata': {'title': 'generated-id', 'permalink': 'notes/new-note'}})
         script = r'''
 const frame = document.querySelector('iframe');
 let requests = [], modeReply = 'fullscreen', sizes = 0, initialized;
@@ -80,6 +82,14 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(el('headline').textContent === 'Preview · nothing saved', 'preview');
  await result({knowledge_change:UNCHANGED});
  assert(el('headline').textContent === 'No content changes' && el('counts').textContent.includes('0 changes'), 'no-op');
+ await result({knowledge_change:CREATED});
+ assert(el('overview').textContent.includes('New reader-facing explanation.') && !el('overview').textContent.includes('generated-id'), 'creation summary leads with prose');
+ el('toggle').click(); await wait();
+ assert(el('changes').children.length === 1 && el('note-fields').hidden && el('more').hidden, 'creation fields are secondary');
+ el('fields-toggle').click(); await wait();
+ assert(el('note-fields').textContent.includes('generated-id') && el('note-fields').textContent.includes('notes/new-note'), 'all initialized fields remain inspectable');
+ await result({knowledge_change:CREATED}); el('toggle').click(); await wait();
+ assert(el('note-fields').hidden, 'new result resets field disclosure');
  for (const clipped of [CLIPPED, CLIPPED_GROUP]) {
   await result({knowledge_change:clipped});
   assert(el('overview').textContent.includes('Text changed outside the receipt excerpts'), 'clipped edit disclosed in summary');
@@ -134,7 +144,8 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
 '''
         script = ('const CHANGE = ' + json.dumps(change) + '; const UNCHANGED = ' + json.dumps(unchanged)
                   + '; const CLIPPED = ' + json.dumps(clipped) + '; const CLIPPED_GROUP = '
-                  + json.dumps(clipped_group) + '; const REFLOW = ' + json.dumps(reflow) + ';\n' + script)
+                  + json.dumps(clipped_group) + '; const REFLOW = ' + json.dumps(reflow)
+                  + '; const CREATED = ' + json.dumps(created) + ';\n' + script)
         script += '\nframe.srcdoc = ' + json.dumps(html()) + ';'
         self.run_browser(script)
 

@@ -1,5 +1,15 @@
 # Validation
 
+## New-note review
+
+New-note receipts lead with the added prose. Initialized fields have a separate
+`Note fields` disclosure; all values and raw audit data remain available. Existing
+note edits retain their before/after comparisons. Added and removed content summaries
+allow 300 characters, matching other prose summaries. All 102 source checks pass,
+including Chromium disclosure, reset, existing-edit, and narrow-layout controls.
+The UI build and mechanical source scan pass. This does not establish installed-client
+acceptance or full-note reading: truncated receipts still expose only excerpts.
+
 ## Governed record identifiers
 
 All 102 source checks pass. New `.md` and `.MD` record IDs are rejected before

@@ -205,7 +205,7 @@ function SummaryEntry({ item, showNote }: { item: Entry; showNote: boolean }) {
       {item.message !== undefined ? (
         excerpt(item.message)
       ) : item.title === "Added content" || item.title === "Removed content" ? (
-        excerpt(item.title === "Added content" ? item.after : item.before)
+        excerpt(item.title === "Added content" ? item.after : item.before, 300)
       ) : (
         <>
           <span>{before}</span>
@@ -271,7 +271,14 @@ function App() {
         ? "Operation cancelled"
         : view.headline;
   const batch = Array.isArray(state.result?.completed);
-  const overview = view.entries
+  const created =
+    !state.error &&
+    state.result?.knowledge_change?.body_change?.kind === "created";
+  const fields = created
+    ? view.entries.filter((item) => item.kind === "field")
+    : [];
+  const primary = view.entries.filter((item) => !fields.includes(item));
+  const overview = primary
     .filter((item) => item.kind !== "message")
     .slice(0, batch ? 3 : 2);
   const errors = view.entries.filter((item) => item.kind === "message");
@@ -367,13 +374,13 @@ function App() {
             </div>
             <CollapsibleContent id="review">
               <div id="changes" className="flex flex-col gap-3">
-                {view.entries.slice(0, state.visible).map((item, index) => (
+                {primary.slice(0, state.visible).map((item, index) => (
                   <section
                     key={`${state.generation}-${index}`}
                     className="flex flex-col gap-2"
                   >
                     <Separator />
-                    {batch && item.note !== view.entries[index - 1]?.note && (
+                    {batch && item.note !== primary[index - 1]?.note && (
                       <div>
                         <h2 className="break-anywhere font-medium">
                           {item.noteTitle || noteName(item.note ?? "")}
@@ -393,12 +400,34 @@ function App() {
                   id="more"
                   variant="secondary"
                   size="sm"
-                  hidden={state.visible >= view.entries.length}
+                  hidden={state.visible >= primary.length}
                   onClick={bridge.showMore}
                 >
-                  Show more ({Math.max(0, view.entries.length - state.visible)}{" "}
+                  Show more ({Math.max(0, primary.length - state.visible)}{" "}
                   remaining)
                 </Button>
+                {fields.length > 0 && (
+                  <Collapsible key={`fields-${state.generation}`}>
+                    <CollapsibleTrigger asChild>
+                      <Button id="fields-toggle" variant="secondary" size="sm">
+                        Note fields ({fields.length})
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent
+                      id="note-fields"
+                      className="flex flex-col gap-3 pt-3"
+                    >
+                      {fields.map((item, index) => (
+                        <section key={index} className="flex flex-col gap-2">
+                          <h3 className="text-xs font-medium text-muted-foreground">
+                            {item.title}
+                          </h3>
+                          <Comparison item={item} />
+                        </section>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
                 <Evidence
                   key={state.generation}
                   result={state.result}
