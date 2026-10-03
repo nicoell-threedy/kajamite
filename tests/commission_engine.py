@@ -53,6 +53,12 @@ async def run(config):
     settings = Settings.load(config)
     async with connect(settings) as backend:
         engine = KnowledgeEngine(backend, evidence_checker=lambda record, scope: True)
+        try:
+            await engine.record_create('Records', make_record('filename.md'))
+        except KnowledgeError as error:
+            assert str(error) == 'record_id is an identifier, not a Markdown filename; omit the .md suffix'
+        else:
+            raise AssertionError('Filename-shaped record IDs must fail before creation')
         created = await engine.record_create('Records', make_record())
         identifier = created['identifier']
         assert created['committed_revision'] == 1

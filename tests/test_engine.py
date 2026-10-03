@@ -48,6 +48,23 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_creation_rejects_markdown_suffix_without_breaking_existing_ids(self):
+        for identifier in ("topic.md", "topic.MD"):
+            record = source_record()
+            record["record_id"] = record["events"][0]["snapshot"]["record_id"] = identifier
+            with self.assertRaisesRegex(KnowledgeError, "omit the .md suffix"):
+                await self.engine.record_create("facts", record)
+        self.assertEqual([], self.backend.calls)
+        legacy = source_record()
+        legacy["record_id"] = legacy["events"][0]["snapshot"]["record_id"] = "legacy.md"
+        await self.backend.call("write_note", {"title": "legacy.md", "content": legacy["claim"],
+            "directory": "facts", "note_type": "governed-record", "overwrite": False,
+            "metadata": {"kajamite_record": legacy, "kajamite_operations": {}}})
+        self.assertEqual(legacy, (await self.engine.read("facts/legacy.md.md", mode="inspect"))["record"])
+        changed = await self.engine.record_transition("facts/legacy.md.md", "dispute", 1, "review",
+            "2026-01-01T00:00:01.000000Z", "reviewer", "Synthetic review")
+        self.assertEqual("disputed", changed["record"]["status"])
+
     async def test_compact_mutations_preserve_receipts_history_and_replay(self):
         for invalid in (None, 0, "false"):
             with self.assertRaisesRegex(ValueError, "include_history"):

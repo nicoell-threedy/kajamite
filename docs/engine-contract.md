@@ -236,3 +236,8 @@ statements for consistency with the revised claim; valid references alone do not
 establish semantic support. Invalid shapes
 and dangling observation references return actionable errors before any write;
 errors do not expose the record's identifiers or evidence values.
+
+New governed creation requires a bare `record_id` without a `.md` suffix. Directory
+segments belong in `namespace`; the backend supplies the Markdown extension.
+Filename-shaped IDs fail before backend access. Existing records with such IDs
+remain readable and can still receive lifecycle transitions; no IDs are rewritten.

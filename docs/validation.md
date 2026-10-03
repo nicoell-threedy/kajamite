@@ -1,5 +1,12 @@
 # Validation
 
+## Governed record identifiers
+
+All 102 source checks pass. New `.md` and `.MD` record IDs are rejected before
+backend access, with guidance to use a bare ID and a separate namespace. Synthetic
+legacy records with such IDs remain readable and support lifecycle transitions.
+The native commissioning fixture also exercises the creation rejection.
+
 ## Passage summaries
 
 Receipt counts distinguish text edits from field updates. Collapsed text comparisons

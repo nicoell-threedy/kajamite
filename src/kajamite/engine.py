@@ -250,6 +250,8 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             raise KnowledgeError("record creation input is invalid") from error
         if value["record_revision"] != 1 or value["events"][0]["action"] != "create":
             raise KnowledgeError("record_create requires a revision-one create record")
+        if value["record_id"].lower().endswith(".md"):
+            raise KnowledgeError("record_id is an identifier, not a Markdown filename; omit the .md suffix")
         directory = self._namespace(namespace).lstrip("/")
         await self._authorize((directory + "/" if directory else "") + value["record_id"] + ".md", None)
         async with self.backend.mutation():
