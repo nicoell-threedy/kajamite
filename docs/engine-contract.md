@@ -191,6 +191,25 @@ Preserve error status; an uncertain mutation must not become a success receipt.
 Compatible presentation updates come from the installed Kajamite package.
 The frontend requires the `mcp` extra; engine-only imports remain dependency-free.
 
+Hosts can use the optional `kajamite-mutation-summary/1` presentation format without
+changing the engine's default results. The structured summary contains `ok=true`,
+`readback_verified=true`, `operation`, `receipt_id`, `identifier`,
+`committed_revision`, `record_status`, `replayed`, `change_summary`, and
+`audit.sha256`. Partial or failed operations do not qualify for this format.
+The complete original result, with top-level receipt fields, travels as a JSON
+string in MCP `_meta.audit_snapshot`. Its exact UTF-8 bytes produce `audit.sha256`;
+the UI hashes that string before parsing it, so no cross-language JSON
+canonicalization is required. The digest checks consistency, not producer identity.
+
+The UI also matches operation identity, committed/record/receipt revisions, saved
+status, replay state, and readback identity. Matching metadata restores ordinary
+change review and raw audit disclosure. Missing, malformed, altered, or mismatched
+metadata leaves an explicit summary-only view that preserves the reported completed
+outcome. `audit.available=false` means server readback is unavailable; forwarded
+metadata can still support review. An unavailable audit never means a write should
+be repeated. Hosts must separately qualify model delivery, retention, access control,
+and client metadata forwarding. Default tool responses remain unchanged.
+
 Governed create and transition receipts include optional `record_changes` derived
 from validated before/after records. Scope and verification changes have individual
 field entries; status and dependency changes retain their values. Evidence entries

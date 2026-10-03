@@ -11,6 +11,15 @@ export type Entry = {
   afterRanges?: [number, number][];
   message?: string;
 };
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
 export async function creationClaim(output: any): Promise<string | null> {
   const receipt = output?.knowledge_change,
     record = output?.record;
@@ -26,13 +35,7 @@ export async function creationClaim(output: any): Promise<string | null> {
   )
     return null;
   try {
-    const digest = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(record.claim),
-    );
-    const hash = Array.from(new Uint8Array(digest), (value) =>
-      value.toString(16).padStart(2, "0"),
-    ).join("");
+    const hash = await sha256(record.claim);
     return hash === receipt.record_claim_sha256 ? record.claim : null;
   } catch (_) {
     return null;
@@ -52,6 +55,59 @@ export type View = {
 };
 const text = (value: any) =>
   typeof value === "string" ? value : JSON.stringify(value);
+export const isMutationSummary = (value: any) =>
+  value?.response_format === "kajamite-mutation-summary/1" &&
+  value.ok === true &&
+  value.readback_verified === true &&
+  !value.partial &&
+  !value.errors?.length &&
+  typeof value.operation === "string" &&
+  value.operation.length > 0 &&
+  typeof value.receipt_id === "string" &&
+  value.receipt_id.length > 0 &&
+  typeof value.identifier === "string" &&
+  value.identifier.length > 0 &&
+  Number.isInteger(value.committed_revision) &&
+  value.committed_revision > 0 &&
+  typeof value.record_status === "string" &&
+  value.record_status.length > 0 &&
+  typeof value.replayed === "boolean";
+
+export async function reviewResult(params: any): Promise<any> {
+  const summary = params?.structuredContent ?? params;
+  if (params?.isError || !isMutationSummary(summary)) return summary;
+  const serialized = params?._meta?.audit_snapshot;
+  if (
+    typeof serialized !== "string" ||
+    typeof summary.audit?.sha256 !== "string"
+  )
+    return summary;
+  let snapshot;
+  try {
+    if ((await sha256(serialized)) !== summary.audit.sha256) return summary;
+    snapshot = JSON.parse(serialized);
+  } catch (_) {
+    return summary;
+  }
+  if (
+    snapshot?.ok !== true ||
+    snapshot.partial ||
+    snapshot.errors?.length ||
+    snapshot.receipt_id !== summary.receipt_id ||
+    snapshot.operation !== summary.operation ||
+    snapshot.identifier !== summary.identifier ||
+    snapshot.committed_revision !== summary.committed_revision ||
+    snapshot.replayed !== summary.replayed ||
+    snapshot.record?.record_revision !== summary.committed_revision ||
+    snapshot.record?.status !== summary.record_status ||
+    snapshot.knowledge_change?.record_revision !== summary.committed_revision ||
+    snapshot.knowledge_change?.readback_verified !== true ||
+    (snapshot.knowledge_change?.after?.identifier ??
+      snapshot.knowledge_change?.before?.identifier) !== summary.identifier
+  )
+    return summary;
+  return snapshot;
+}
 const noun = (n: number, singular: string) =>
   `${n} ${singular}${n === 1 ? "" : "s"}`;
 export function changeCounts(entries: Entry[]): string {
@@ -203,6 +259,26 @@ export function describe(output: any = {}, isError = false): View {
               .join("\n") || "No successful change receipt was returned.",
         },
       ];
+    } else if (isMutationSummary(output)) {
+      view.headline = output.replayed
+        ? "Previously completed"
+        : "Operation completed";
+      view.subject = output.identifier;
+      view.counts = `Revision ${output.committed_revision}`;
+      view.status = `Saved record state: ${fieldLabel(output.record_status)}.`;
+      view.attention = `${view.status} Complete diff unavailable in this view.`;
+      entries = [
+        {
+          title: "Operation summary",
+          message: output.change_summary || "No change summary supplied.",
+        },
+      ];
+      if (output.audit?.available === false)
+        entries.push({
+          title: "Audit readback",
+          message:
+            "The operation completed, but audit readback is unavailable. Do not repeat the write to recover its receipt.",
+        });
     } else if (output.preview) {
       view.headline = "Preview · nothing saved";
       view.subject = output.identifier ?? "";
@@ -320,6 +396,7 @@ export function describe(output: any = {}, isError = false): View {
   }));
   if (isError) view.action = "View error";
   else if (output?.preview) view.action = "View preview";
+  else if (isMutationSummary(output)) view.action = "View summary";
   else if (!entries.length) view.action = "View details";
   const receipt = output?.knowledge_change;
   if (
@@ -329,7 +406,8 @@ export function describe(output: any = {}, isError = false): View {
     (!receipt &&
       !completedResult(output) &&
       !output?.preview &&
-      !output?.replayed)
+      !output?.replayed &&
+      !isMutationSummary(output))
   )
     view.attention = view.status;
   if (

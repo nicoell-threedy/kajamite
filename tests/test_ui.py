@@ -13,6 +13,83 @@ from kajamite.ui import html
 
 @unittest.skipUnless(os.environ.get('KAJAMITE_BROWSER'), 'set KAJAMITE_BROWSER for browser acceptance')
 class UiTests(unittest.TestCase):
+    def test_compact_summary_metadata_and_fallback(self):
+        before = {'file_path': 'Example/retry.md', 'content': 'Retry after 60 seconds.', 'title': 'Retry policy'}
+        after = before | {'content': 'Retry after 20 seconds.'}
+        change = receipt.for_edit(before, after, find_text=before['content'], replacement=after['content'], metadata_keys=set())
+        change['record_revision'] = 2
+        full = {'ok': True, 'operation': 'record_revise', 'receipt_id': 'synthetic-receipt',
+                'identifier': before['file_path'], 'committed_revision': 2, 'replayed': False,
+                'record': {'record_revision': 2, 'status': 'needs_revalidation'}, 'knowledge_change': change}
+        summary = {'response_format': 'kajamite-mutation-summary/1', 'ok': True, 'operation': 'record_revise',
+                   'receipt_id': 'synthetic-receipt', 'identifier': before['file_path'], 'committed_revision': 2,
+                   'record_status': 'needs_revalidation', 'replayed': False, 'readback_verified': True,
+                   'change_summary': 'Retry delay changed from 60 to 20 seconds.', 'audit': {'available': True}}
+        script = 'const FULL=' + json.dumps(full) + ';const SUMMARY=' + json.dumps(summary) + ';' + r'''
+const frame=document.querySelector('iframe');
+const send=data=>frame.contentWindow.postMessage({jsonrpc:'2.0',...data},'*');
+const wait=()=>new Promise(resolve=>setTimeout(resolve,50));
+const doc=()=>frame.contentDocument, el=id=>doc().getElementById(id);
+const assert=(v,m)=>{if(!v)throw Error(m)};
+const show=async(params)=>{send({method:'ui/notifications/tool-result',params});await wait();};
+const hash=async(text)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))),v=>v.toString(16).padStart(2,'0')).join('');
+const wire=async(snapshot=FULL,summary=SUMMARY)=>{
+ const serialized=JSON.stringify(snapshot);
+ return {structuredContent:{...summary,audit:{...summary.audit,sha256:await hash(serialized)}},_meta:{audit_snapshot:serialized}};
+};
+let initialized;const ready=new Promise(resolve=>initialized=resolve);
+window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;const m=e.data;
+ if(m.method==='ui/initialize')send({id:m.id,result:{hostContext:{displayMode:'inline',availableDisplayModes:['inline']}}});
+ if(m.method==='ui/notifications/initialized')initialized();
+});
+(async()=>{
+ await ready;
+ for(const available of [true,false]){
+  await show(await wire(FULL,{...SUMMARY,audit:{available}}));
+  assert(el('headline').textContent==='Note updated','matched metadata restores the actual receipt');
+  assert(el('overview').textContent.includes('60')&&el('overview').textContent.includes('20'),'actual before and after remain prominent');
+  assert(el('status').textContent.includes('Needs revalidation'),'saved state survives metadata adaptation');
+  el('toggle').click();await wait();
+  assert(el('changes').querySelector('.diff'),'complete diff remains available');
+ }
+ const mismatches=[null,{...FULL,receipt_id:'other'}, {...FULL,operation:'other'},
+  {...FULL,identifier:'Other/note.md'}, {...FULL,committed_revision:3}, {...FULL,replayed:true},
+  {...FULL,record:{...FULL.record,status:'supported'}},
+  {...FULL,knowledge_change:{...FULL.knowledge_change,record_revision:3}},
+  {...FULL,knowledge_change:{...FULL.knowledge_change,readback_verified:false}}, {...FULL,partial:true}];
+ for(const snapshot of mismatches){
+  await show(await wire(snapshot));
+  assert(el('headline').textContent==='Operation completed','missing details do not erase completion');
+  assert(el('status').textContent.includes('Complete diff unavailable'),'missing or mismatched diff is explicit');
+  assert(el('toggle').textContent==='View summary','summary action is honest');
+  el('toggle').click();await wait();assert(!el('changes').querySelector('.diff'),'mismatched snapshot never becomes a diff');
+ }
+ await show({structuredContent:{...SUMMARY,audit:{available:false}}});
+ assert(el('overview').textContent.includes('Do not repeat the write'),'capacity failure does not invite another write');
+ const altered=await wire();altered._meta.audit_snapshot=altered._meta.audit_snapshot.replace('Retry after 20','Retry after 90');
+ await show(altered);
+ assert(el('headline').textContent==='Operation completed'&&el('status').textContent.includes('Complete diff unavailable'),'altered snapshot fails its digest');
+ await show({...await wire(),isError:true});
+ assert(el('headline').textContent==='Operation failed','wire errors override successful metadata');
+ const delayed=await wire();const subtle=frame.contentWindow.crypto.subtle, originalDigest=subtle.digest.bind(subtle);
+ subtle.digest=async(...args)=>{await new Promise(resolve=>setTimeout(resolve,100));return originalDigest(...args);};
+ send({method:'ui/notifications/tool-result',params:delayed});
+ send({method:'ui/notifications/tool-input',params:{}});await new Promise(resolve=>setTimeout(resolve,150));
+ assert(el('headline').textContent==='Working','late digest cannot overwrite new input');
+ send({method:'ui/notifications/tool-result',params:delayed});
+ send({method:'ui/notifications/tool-cancelled',params:{reason:'Stopped'}});await new Promise(resolve=>setTimeout(resolve,150));
+ assert(el('headline').textContent==='Operation cancelled','late digest cannot overwrite cancellation');
+ subtle.digest=originalDigest;
+ await show({structuredContent:FULL});
+ assert(el('headline').textContent==='Note updated','ordinary structured receipt remains supported');
+ frame.style.width='320px';await show({structuredContent:SUMMARY});
+ assert(doc().documentElement.scrollWidth<=320,'summary fallback fits narrow view');
+ document.getElementById('outcome').textContent='BROWSER_ACCEPTANCE_OK';
+})().catch(error=>document.getElementById('outcome').textContent='FAILED: '+error.message);
+'''
+        script += '\nframe.srcdoc=' + json.dumps(html()) + ';'
+        self.run_browser(script)
+
     def test_disclosure_and_host_states(self):
         before = {'file_path': 'Notes/Example.md', 'content': 'old', 'metadata': {}}
         change = receipt.for_revise(before, before | {'content': 'new'}, [

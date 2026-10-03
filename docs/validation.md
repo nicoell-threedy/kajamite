@@ -1,5 +1,16 @@
 # Validation
 
+## Compact-summary review
+
+All 104 source checks pass. The UI verifies the exact snapshot digest and operation
+bindings before restoring full receipt review from MCP metadata. Browser checks
+cover matching and absent metadata, mismatched identity/revision/status, altered
+content, wire errors, unavailable audit readback, ordinary results, and narrow
+layout. Delayed digest checks cannot overwrite newer input or cancellation.
+Format, type, bundle, and mechanical source checks pass. Synthetic-host inspection
+confirms actual before/after rows and explicit fallback. Engine response defaults
+are unchanged; installed-client metadata forwarding remains unqualified.
+
 ## Related-topic completeness diagnostics
 
 Native CI at `b41619a` finds both expected related notes but fails the assertion
