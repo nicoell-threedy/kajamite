@@ -246,6 +246,15 @@
   color: var(--muted-foreground);
   padding-top: 2px;
 }
+@media (max-width: 420px) {
+  .diff-line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .diff-label {
+    padding-top: 0;
+  }
+}
 .diff-line mark {
   background: transparent;
   color: inherit;

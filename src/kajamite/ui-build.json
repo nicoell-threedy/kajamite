@@ -7,21 +7,21 @@
     "web/components.json": "63b626306f2a50918a2a3255c505f9ec9e1e0bf1f0de98184f6331133a88d90b",
     "web/package-lock.json": "5eb01f9e03ee9e8e3fc5893b366d6b274ef652797d4283aa4523374a77cdd2aa",
     "web/package.json": "31578ab03da34f9a5a21f06a8f120830d3d815bac5d9849f59d058e10fb9d2c8",
-    "web/src/app.tsx": "75834cbdbb4902bff89c9d5d0bfebceafe257957ca542fe18afaaa8e23180ea0",
+    "web/src/app.tsx": "62f229b9c76f4820285759799ff6a3ce7e3832a6edbc44e7b138be812f46e55f",
     "web/src/bridge.ts": "09e9ea3f30661c9c2b2cfaf28b67d379ae40047653da492a9f6b1a181780bc33",
     "web/src/components/ui/button.tsx": "09a13e6d2f2cea670681dba52a245a5083649a25957554e2f6cade27a80e7edf",
     "web/src/components/ui/card.tsx": "34117e5352d4cc9b49a73546ae39bcd15887f82eedecb13a2414003f35b83db5",
     "web/src/components/ui/collapsible.tsx": "b763764ebced561c04e2e6ada9dc53375bb90b9f4bcb91b0f3d5de7381aaf0cb",
     "web/src/components/ui/separator.tsx": "60e1a2897949d87924828dcd72280dec87213e60ee2970a3cd10772971554db5",
     "web/src/lib/utils.ts": "c4afe23db29651dec75ca5a3098a8bafe35f78cd45d4773d1db1c8001e640623",
-    "web/src/model.ts": "fbd2f9dca342cff9524749be72c06a22acb0dc4bc7b8e51ee6281456311c128a",
-    "web/src/style.css": "0153d1104ca5a64a934f55979386efedbaa3dc2f5b936f7b640f1b4917f77907",
+    "web/src/model.ts": "6362c24bac4fc12058ae877e5429b312dfa5222709d0c388b73a3915768afb27",
+    "web/src/style.css": "113b0b0af51c7db77e12a8298d65205285cf853af47ac2f313613be26119521e",
     "web/src/theme.ts": "649a75de6f81d5875971e2c29a8a02d37e83fb6ca3fc597fdc7d7f452d2241d7",
     "web/template.html": "c0dba276e3f1e90aea76230986065ec041af913d4109494db8f824f33d0f488e",
     "web/tsconfig.json": "40fcc4f603ee7bf5fd6063aed4a8a870e9267082055cd2cf771615b1d16dd9df"
   },
   "outputs": {
-    "src/kajamite/knowledge-change.html": "f08185dfc653acfe6db671c87ea37e398cafdb379dd77c0fdf40492f4695e88c",
+    "src/kajamite/knowledge-change.html": "18633efbeac7dede43f6d729071fbb326590fa1e7521bc9365b5016cd169c632",
     "src/kajamite/UI-NOTICES.txt": "f83a3c074933368f144b1a52bcdd3902f2e37d60072368a89277bf48de2a58fc"
   }
 }

@@ -20,6 +20,7 @@ import {
   noteName,
   excerpt,
   changeExcerpts,
+  changeCounts,
   type Entry,
 } from "./model";
 const theme = JSON.parse(
@@ -187,7 +188,11 @@ function Comparison({ item }: { item: Entry }) {
   );
 }
 function SummaryEntry({ item, showNote }: { item: Entry; showNote: boolean }) {
-  const [before, after] = changeExcerpts(item.before, item.after);
+  const [before, after] = changeExcerpts(
+    item.before,
+    item.after,
+    item.kind === "text" ? 300 : 110,
+  );
   return (
     <li className="summary-line">
       {showNote && item.note && (
@@ -270,6 +275,9 @@ function App() {
     .filter((item) => item.kind !== "message")
     .slice(0, batch ? 3 : 2);
   const errors = view.entries.filter((item) => item.kind === "message");
+  const remaining = view.entries.filter(
+    (item) => item.kind !== "message" && !overview.includes(item),
+  );
   useEffect(() => {
     const observer = new ResizeObserver(bridge.resize);
     observer.observe(document.body);
@@ -318,14 +326,9 @@ function App() {
                         ))}
                       </ul>
                     )}
-                    {view.entries.length > overview.length && !state.error && (
+                    {remaining.length > 0 && !state.error && (
                       <p className="text-xs text-muted-foreground">
-                        {view.entries.length - overview.length} more{" "}
-                        {batch ? "item" : "change"}
-                        {view.entries.length - overview.length === 1
-                          ? ""
-                          : "s"}{" "}
-                        in details
+                        {changeCounts(remaining)} in details
                       </p>
                     )}
                   </>

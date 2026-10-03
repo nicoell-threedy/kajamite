@@ -55,7 +55,7 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(el('review').hidden && !el('evidence'), 'details start hidden');
  assert(doc().body.getBoundingClientRect().height < 240, 'compact initial height');
  assert(el('overview').textContent.includes('old passage 0') && el('overview').textContent.includes('new passage 0'), 'real edits visible without interaction');
- assert(el('counts').textContent === '1 note · 9 changes', 'notes and passages are distinct');
+ assert(el('counts').textContent === '1 note · 9 text edits', 'notes and passages are distinct');
  for (const state of ['disputed','needs_revalidation','unverifiable','superseded','retracted']) {
   await result({knowledge_change:CHANGE,record:{status:state}});
   assert(!el('status').hidden && el('status').textContent.includes(state.replaceAll('_',' ').replace(/^./, c=>c.toUpperCase())), 'saved lifecycle state visible: '+state);
@@ -83,7 +83,7 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  for (const clipped of [CLIPPED, CLIPPED_GROUP]) {
   await result({knowledge_change:clipped});
   assert(el('overview').textContent.includes('Text changed outside the receipt excerpts'), 'clipped edit disclosed in summary');
-  assert(el('counts').textContent === '1 note · 1 change', 'clipped edit remains a change');
+  assert(el('counts').textContent === '1 note · 1 text edit', 'clipped edit remains a change');
   el('toggle').click(); await wait();
   assert(el('changes').textContent.includes('The changed passage is unavailable.'), 'missing passage disclosed in details');
   assert(!el('changes').querySelector('mark') && !el('changes').querySelector('.diff'), 'identical previews are not a diff');
@@ -232,7 +232,10 @@ const load = async index => {
         long_text = 'Shared context ' * 65
         long_change = receipt.for_revise(before, before | {'content': 'Updated'}, [
             {'find_text': long_text + 'Arrive Monday.', 'replacement': long_text + 'Arrive Tuesday.'}])
-        script = 'const CHANGES=' + json.dumps([change, long_change, tracking, semantic, legacy]) + ';const PAGE=' + json.dumps(html()) + ';' + r'''
+        paragraph = 'Removing a local entry clears its cached details and registration, but keeps the shared collection available to the other entries that still refer to it.'
+        passage = receipt.for_revise(before, before | {'content': paragraph}, [{'find_text': 'Removing a local entry deletes the shared collection.', 'replacement': paragraph}])
+        passage['record_changes'] = [{'key': 'evidence', 'message': 'Support updated.'}, {'key': 'observations', 'message': 'Statements updated.'}]
+        script = 'const CHANGES=' + json.dumps([change, long_change, tracking, semantic, legacy, passage]) + ';const PAGE=' + json.dumps(html()) + ';' + r'''
 const frame=document.querySelector('iframe');
 const send=data=>frame.contentWindow.postMessage({jsonrpc:'2.0',...data},'*');
 const wait=()=>new Promise(r=>setTimeout(r,70));
@@ -250,7 +253,7 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  assert(el('subject').textContent.includes('Conference'),'named subject');
  assert(el('overview').textContent.includes('Status: draft → confirmed'),'field labeled in summary');
  assert(!el('overview').textContent.includes('revision'),'counter excluded');
- assert(el('counts').textContent==='1 note · 1 change' && !el('overview').textContent.includes('synthetic-replay-marker'),'bookkeeping excluded from review count');
+ assert(el('counts').textContent==='1 note · 1 field update' && !el('overview').textContent.includes('synthetic-replay-marker'),'bookkeeping excluded from review count');
  el('toggle').click();await wait();assert(el('changes').textContent.includes('Status'),'field labeled in details');
  assert(!el('evidence-toggle')&&!el('raw'),'diagnostics secondary');
  assert(!el('changes').textContent.includes('Kajamite operations'),'bookkeeping excluded from primary details');
@@ -276,6 +279,14 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  el('toggle').click();await wait();
  const full=Array.from(doc().querySelectorAll('button')).find(b=>b.textContent==='Show full excerpt');
  assert(full,'long excerpt bounded');full.click();await wait();assert(el('changes').textContent.includes('Tuesday'),'full excerpt reachable');
+ await result({knowledge_change:CHANGES[5]});
+ assert(el('counts').textContent==='1 note · 1 text edit · 2 field updates','text edits separated from supporting fields');
+ assert(el('overview').textContent.includes('other entries that still refer to it.'),'bounded paragraph retains final qualification');
+ assert(el('overview').textContent.includes('1 field update in details'),'remaining fields are not extra passage edits');
+ frame.style.width='320px';await wait();el('toggle').click();await wait();
+ const row=doc().querySelector('.diff-line');
+ assert(frame.contentWindow.getComputedStyle(row).gridTemplateColumns.split(' ').length===1,'narrow diff labels stack above text');
+ frame.style.width='760px';await wait();
  await result({completed:[{knowledge_change:CHANGES[0]}],errors:[{identifier:'Plans/Other.md',error:'Revision conflict'}],partial:true});
  assert(doc().body.textContent.includes('Other: Revision conflict')&&el('review').hidden,'failure visible without opening');
  document.getElementById('outcome').textContent='BROWSER_ACCEPTANCE_OK';

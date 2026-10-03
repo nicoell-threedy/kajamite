@@ -1,5 +1,16 @@
 # Validation
 
+## Passage summaries
+
+Receipt counts distinguish text edits from field updates. Collapsed text comparisons
+retain up to 300 characters per side around the edit; larger passages keep explicit
+truncation and remain available in details. Narrow comparisons stack Before/After
+labels above their text at widths up to 420 pixels. Chromium checks cover mixed
+counts, a complete bounded correction, retained field disclosure, and narrow layout.
+Desktop and narrow synthetic-host inspection confirms the same behavior. The
+mechanical source scan reports no findings; this is not a full accessibility audit
+or installed-client acceptance.
+
 ## Evidence revision diagnostics
 
 All 101 source checks pass. Invalid evidence lists and dangling observation

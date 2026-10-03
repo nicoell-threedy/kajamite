@@ -26,6 +26,20 @@ const text = (value: any) =>
   typeof value === "string" ? value : JSON.stringify(value);
 const noun = (n: number, singular: string) =>
   `${n} ${singular}${n === 1 ? "" : "s"}`;
+export function changeCounts(entries: Entry[]): string {
+  const text = entries.filter((entry) => entry.kind === "text").length;
+  const fields = entries.filter((entry) => entry.kind === "field").length;
+  const other = entries.length - text - fields;
+  return (
+    [
+      text ? noun(text, "text edit") : "",
+      fields ? noun(fields, "field update") : "",
+      other ? noun(other, "other change") : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || "0 changes"
+  );
+}
 const valueText = (value: any) => (value == null ? "None" : value.preview);
 export const noteName = (path: string) =>
   path.split("/").filter(Boolean).at(-1)?.replace(/\.md$/i, "") || path;
@@ -37,7 +51,11 @@ export const excerpt = (value = "", limit = 120) => {
   const line = value.replace(/\s+/g, " ").trim();
   return line.length > limit ? line.slice(0, limit).trimEnd() + "…" : line;
 };
-export function changeExcerpts(before = "", after = ""): [string, string] {
+export function changeExcerpts(
+  before = "",
+  after = "",
+  limit = 110,
+): [string, string] {
   let start = 0;
   while (
     start < Math.min(before.length, after.length) &&
@@ -46,7 +64,7 @@ export function changeExcerpts(before = "", after = ""): [string, string] {
     start++;
   const offset = Math.max(0, start - 35);
   const crop = (s: string) =>
-    (offset ? "…" : "") + excerpt(s.slice(offset), 110);
+    (offset ? "…" : "") + excerpt(s.slice(offset), limit);
   return [crop(before), crop(after)];
 }
 const receiptEntries = (receipt: any) => {
@@ -187,7 +205,7 @@ export function describe(output: any = {}, isError = false): View {
         receipt.affected_notes_exact && Number.isInteger(n)
           ? noun(n, "note")
           : "Note count not reported";
-      view.counts = `${count} · ${noun(entries.length, "change")}`;
+      view.counts = `${count} · ${changeCounts(entries)}`;
       view.status = receipt.readback_verified
         ? "Saved result checked"
         : "Backend confirmed";
