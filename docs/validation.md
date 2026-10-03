@@ -1,5 +1,21 @@
 # Validation
 
+## Maintenance state visibility
+
+The collapsed maintenance view reports how many newly saved notes need
+revalidation, including notes outside the first three visible entries. It counts
+distinct note identifiers only from readback-verified status changes. Replayed
+and unverified outcomes do not imply a new saved state; partial failures retain
+the retry warning. Known lifecycle labels are readable words, while raw values
+remain intact in the receipt.
+
+The same five-dependent-note engine payload was inspected before and after the
+presentation change at desktop and narrow widths. All 107 source checks and
+107 installed-wheel checks pass, with one expected packaged source-history skip.
+Frontend formatting, types, bundle checks, and four browser checks pass. Backend
+Python code is unchanged from `e2ba5f3`; native commissioning was not repeated for
+this presentation-only change. Installed-client acceptance remains open.
+
 ## Read failures and directory ordering
 
 Read-only MCP backend failures report a read failure and no attempted knowledge

@@ -138,6 +138,12 @@ const attentionStates = [
   "superseded",
   "retracted",
 ];
+const fieldValue = (key: string, value: any) =>
+  key === "status" &&
+  typeof value === "string" &&
+  ["supported", ...attentionStates].includes(value)
+    ? fieldLabel(value)
+    : text(value);
 export const excerpt = (value = "", limit = 120) => {
   const line = value.replace(/\s+/g, " ").trim();
   return line.length > limit ? line.slice(0, limit).trimEnd() + "…" : line;
@@ -212,8 +218,14 @@ const receiptEntries = (receipt: any) => {
       title: change.key.split(".").map(fieldLabel).join(" · "),
       note: title,
       kind: "field",
-      before: change.before_present === false ? "Absent" : text(change.before),
-      after: change.after_present === false ? "Absent" : text(change.after),
+      before:
+        change.before_present === false
+          ? "Absent"
+          : fieldValue(change.key, change.before),
+      after:
+        change.after_present === false
+          ? "Absent"
+          : fieldValue(change.key, change.after),
       message: change.message,
     });
   }
@@ -374,6 +386,25 @@ export function describe(output: any = {}, isError = false): View {
         output.partial || errors.length
           ? "Inspect failed items before retrying."
           : "Maintenance result checked";
+      const revalidation = new Set(
+        fresh
+          .filter(
+            (item: any) =>
+              item.knowledge_change.readback_verified &&
+              item.knowledge_change.record_changes?.some(
+                (change: any) =>
+                  change.key === "status" &&
+                  change.after === "needs_revalidation",
+              ),
+          )
+          .map((item: any) => item.knowledge_change.after?.identifier)
+          .filter(
+            (identifier: any) =>
+              typeof identifier === "string" && identifier.length > 0,
+          ),
+      ).size;
+      if (revalidation && !output.partial && !errors.length)
+        view.attention = `${noun(revalidation, "saved note")} ${revalidation === 1 ? "needs" : "need"} revalidation.`;
     } else if (output.replayed) {
       view.headline = "Previously completed";
       view.subject = output.identifier ?? "";
