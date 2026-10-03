@@ -254,8 +254,19 @@ export function describe(output: any = {}, isError = false): View {
     const completed = Array.isArray(output.completed) ? output.completed : null;
     if (isError) {
       view.headline = "Operation failed";
-      view.status =
-        "A write may have committed. Inspect current state before retrying.";
+      const notStarted =
+        output.error?.mutation_outcome === "not_started" &&
+        output.ok !== true &&
+        !receipt &&
+        !completed?.length &&
+        !output.mutation &&
+        output.committed_revision == null &&
+        !output.replayed &&
+        !output.accepted_state &&
+        !output.error?.accepted_state;
+      view.status = notStarted
+        ? "No write was attempted. Correct the input and retry."
+        : "A write may have committed. Inspect current state before retrying.";
       entries = [
         {
           title: "Error",

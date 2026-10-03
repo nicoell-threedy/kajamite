@@ -131,6 +131,12 @@ external network access or executable actions. Hosts without MCP Apps support
 still receive the complete structured result and labeled text fallback. The UI
 is presentation, not authority, and is not required for a successful operation.
 
+An error producer can set `error.mutation_outcome="not_started"` only when it
+knows the operation failed before a write attempt. The UI then directs the caller
+to correct the input. It retains the uncertainty warning when that marker is
+absent, unknown, or contradicted by completed-state evidence. Exception type alone
+does not establish whether a write started.
+
 ## Agent behavior and observability
 
 The reusable skill teaches discovery, selective context retrieval, checkpoint

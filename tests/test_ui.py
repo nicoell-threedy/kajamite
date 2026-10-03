@@ -216,6 +216,16 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(el('headline').textContent === 'No new changes', 'empty maintenance');
  await result({content:[{type:'text',text:'uncertain'}]},true);
  assert(el('headline').textContent === 'Operation failed' && el('status').textContent.includes('may have committed'), 'failure');
+ const rejectedInput = {ok:false,error:{mutation_outcome:'not_started'},content:[{type:'text',text:'Required verification fields are missing.'}]};
+ await result(rejectedInput,true);
+ assert(el('headline').textContent === 'Operation failed' && el('status').textContent.includes('No write was attempted'), 'explicit pre-write rejection');
+ assert(el('overview').textContent.includes('Required verification fields'), 'input error remains primary');
+ for (const contradiction of [{ok:true},{knowledge_change:CHANGE},{completed:[{knowledge_change:CHANGE}]},{mutation:{}},{committed_revision:2},{replayed:true},{accepted_state:{records:['Example']}},{error:{mutation_outcome:'not_started',accepted_state:{records:['Example']}}}]) {
+  await result({...rejectedInput,...contradiction},true);
+  assert(el('status').textContent.includes('may have committed'), 'contradictory completion retains uncertainty');
+ }
+ await result({...rejectedInput,error:{mutation_outcome:'unknown'}},true);
+ assert(el('status').textContent.includes('may have committed'), 'unknown rejection metadata retains uncertainty');
  await result({knowledge_change:CHANGE,record:{status:'needs_revalidation'},content:[{type:'text',text:'uncertain'}]},true);
  assert(el('status').textContent.includes('may have committed') && !el('status').textContent.includes('Saved record state'), 'failure takes precedence over record state');
  await result({}); assert(el('headline').textContent === 'No change receipt returned', 'missing receipt');

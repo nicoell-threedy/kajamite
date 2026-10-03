@@ -1,5 +1,20 @@
 # Validation
 
+## Pre-write rejection
+
+The shared error view accepts an explicit `error.mutation_outcome="not_started"`
+marker when no completion evidence contradicts it. The input problem remains
+visible and the view says that no write was attempted. Unknown errors, unknown
+markers, receipts, completed items, mutation results, committed revisions, replay,
+and accepted-state evidence retain the uncertainty warning.
+
+All 107 source checks and 107 isolated installed-wheel checks pass, with one
+expected packaged source-history skip. Browser checks cover the rejection and
+contradiction cases; frontend formatting, types, and bundled assets pass checks.
+An actual pre-write error envelope is readable in shared-host desktop and 320px
+views. This does not establish installed-client acceptance or classify other
+exceptions as pre-write failures. Backend behavior is unchanged.
+
 ## Graph continuation
 
 Native CI at `cca6d58` returns the expected linked notes but advertises another

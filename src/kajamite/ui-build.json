@@ -14,14 +14,14 @@
     "web/src/components/ui/collapsible.tsx": "b763764ebced561c04e2e6ada9dc53375bb90b9f4bcb91b0f3d5de7381aaf0cb",
     "web/src/components/ui/separator.tsx": "60e1a2897949d87924828dcd72280dec87213e60ee2970a3cd10772971554db5",
     "web/src/lib/utils.ts": "c4afe23db29651dec75ca5a3098a8bafe35f78cd45d4773d1db1c8001e640623",
-    "web/src/model.ts": "892085064a0a1964b43bb275e9802da89569d45992b53d7bafeefe6c8adaca4b",
+    "web/src/model.ts": "706cf9cd6a933b40317290cc5b6f283fa0c7f545178f00aed655a9dd0647fc59",
     "web/src/style.css": "113b0b0af51c7db77e12a8298d65205285cf853af47ac2f313613be26119521e",
     "web/src/theme.ts": "649a75de6f81d5875971e2c29a8a02d37e83fb6ca3fc597fdc7d7f452d2241d7",
     "web/template.html": "c0dba276e3f1e90aea76230986065ec041af913d4109494db8f824f33d0f488e",
     "web/tsconfig.json": "40fcc4f603ee7bf5fd6063aed4a8a870e9267082055cd2cf771615b1d16dd9df"
   },
   "outputs": {
-    "src/kajamite/knowledge-change.html": "097aacf5add9648851d73787e60914700ee0c05a897b1c0c55cc44e19721d2f9",
+    "src/kajamite/knowledge-change.html": "584fef66fa18d057cc82cd30c9d8a776408e8b93da99b0ee29b5b4e18e17b3ab",
     "src/kajamite/UI-NOTICES.txt": "f83a3c074933368f144b1a52bcdd3902f2e37d60072368a89277bf48de2a58fc"
   }
 }
