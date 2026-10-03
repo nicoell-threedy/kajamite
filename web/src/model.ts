@@ -131,6 +131,13 @@ const fieldLabel = (key: string) => {
   const name = key.replace(/[_-]/g, " ");
   return name.charAt(0).toUpperCase() + name.slice(1);
 };
+const attentionStates = [
+  "disputed",
+  "needs_revalidation",
+  "unverifiable",
+  "superseded",
+  "retracted",
+];
 export const excerpt = (value = "", limit = 120) => {
   const line = value.replace(/\s+/g, " ").trim();
   return line.length > limit ? line.slice(0, limit).trimEnd() + "…" : line;
@@ -355,7 +362,22 @@ export function describe(output: any = {}, isError = false): View {
           : "Maintenance result checked";
     } else if (output.replayed) {
       view.headline = "Previously completed";
-      view.status = "Earlier result · no new write";
+      view.subject = output.identifier ?? "";
+      view.counts = [
+        Number.isInteger(output.operation_revision) &&
+        output.operation_revision > 0
+          ? `Operation revision ${output.operation_revision}`
+          : "",
+        Number.isInteger(output.committed_revision) &&
+        output.committed_revision > 0
+          ? `Returned revision ${output.committed_revision}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      view.status = "Earlier operation · no new write";
+      if (attentionStates.includes(output.record?.status))
+        view.attention = `Returned record state: ${fieldLabel(output.record.status)}.`;
     } else {
       view.headline = "No change receipt returned";
       view.status = "Inspect the tool result before claiming a saved change.";
@@ -415,13 +437,7 @@ export function describe(output: any = {}, isError = false): View {
     !output.replayed &&
     !output.preview &&
     !view.attention &&
-    [
-      "disputed",
-      "needs_revalidation",
-      "unverifiable",
-      "superseded",
-      "retracted",
-    ].includes(output.record?.status)
+    attentionStates.includes(output.record?.status)
   )
     view.attention = `Saved record state: ${fieldLabel(output.record.status)}.`;
   if (receipt && !output.replayed) {
@@ -436,7 +452,8 @@ export function describe(output: any = {}, isError = false): View {
         : "The note already matches the requested edit.";
   }
   if (output?.replayed)
-    view.summary = "This is an earlier result. Nothing was written again.";
+    view.summary =
+      "This operation completed earlier. Nothing was written again.";
   if (output?.preview) view.summary = "Proposed text. Nothing has been saved.";
   if (completedResult(output) && !view.entries.length)
     view.summary = output.completed.some(

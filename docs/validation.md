@@ -1,5 +1,14 @@
 # Validation
 
+## Replay context
+
+Replay results without a change receipt identify the returned note and distinguish
+the original operation revision from the returned record revision. They show no
+invented diff and preserve warnings on the returned record state. Missing revision
+fields remain absent. All 104 source checks and the UI build pass, including
+ordinary receipt and fullscreen behavior. Desktop and 320px inspection confirms
+the replay context remains readable. Installed-client acceptance remains separate.
+
 ## Compact-summary review
 
 All 104 source checks pass. The UI verifies the exact snapshot digest and operation

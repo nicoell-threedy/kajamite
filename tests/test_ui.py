@@ -147,8 +147,17 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  }
  await result({knowledge_change:CHANGE,record:{status:'supported'}});
  assert(el('status').hidden, 'supported state does not require attention');
+ await result({replayed:true,identifier:'Notes/Example.md',operation_revision:2,committed_revision:3,record:{status:'needs_revalidation'}});
+ assert(el('headline').textContent==='Previously completed' && el('subject').textContent.includes('Notes/Example.md'), 'replay identifies the returned note');
+ assert(el('counts').textContent==='Operation revision 2 · Returned revision 3', 'replay distinguishes original operation from current readback');
+ assert(el('status').textContent==='Returned record state: Needs revalidation.', 'replay labels the returned state');
+ el('toggle').click();await wait();assert(!el('changes').querySelector('.diff'), 'replay without a receipt invents no diff');
+ await result({replayed:true,identifier:'Notes/Example.md',committed_revision:3});
+ assert(el('counts').textContent==='Returned revision 3', 'missing operation revision is not invented');
+ await result({knowledge_change:CHANGE,record:{status:'supported'}});
+ const changeRequest=requests.length;
  el('toggle').click(); await wait();
- assert(requests[0] === 'fullscreen' && !el('review').hidden, 'advertised fullscreen');
+ assert(requests[changeRequest] === 'fullscreen' && !el('review').hidden, 'advertised fullscreen');
  assert(el('changes').children.length === 3, 'bounded first disclosure');
  el('more').click(); await wait(); assert(el('changes').children.length === 6, 'show more');
  reply({method:'ui/notifications/host-context-changed',params:{displayMode:'inline'}}); await wait();
