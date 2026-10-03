@@ -1,5 +1,16 @@
 # Validation
 
+## Complete creation snapshots
+
+All 103 source checks pass. Governed creation binds the returned claim with a
+claim-specific digest and committed revision. The shared UI verifies these fields
+before exposing the complete note, without copying the claim into its receipt.
+Browser checks retain excerpts for altered claims, mismatched revisions, missing
+digests, and unverified readback. Unicode content beyond the receipt limit remains
+readable. Backend framing and all three native commissioning phases pass.
+The built view is inspected at desktop and 320px widths without horizontal overflow.
+This snapshot describes the completed operation; it is not a fresh note read.
+
 ## New-note review
 
 New-note receipts lead with the added prose. Initialized fields have a separate

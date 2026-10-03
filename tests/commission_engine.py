@@ -1,6 +1,7 @@
 """Installed engine acceptance against an isolated native backend."""
 import argparse
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -62,6 +63,7 @@ async def run(config):
         created = await engine.record_create('Records', make_record())
         identifier = created['identifier']
         assert created['committed_revision'] == 1
+        assert created['knowledge_change']['record_claim_sha256'] == hashlib.sha256(created['record']['claim'].encode('utf-8')).hexdigest()
         assert (await engine.read(identifier, request_scope=SCOPE))['content'] == make_record()['claim']
         assert (await engine.read(identifier.removesuffix('.md'), request_scope=SCOPE))['content'] == make_record()['claim']
         assert (await engine.read(identifier, request_scope={'system': 'other'}))['withheld']

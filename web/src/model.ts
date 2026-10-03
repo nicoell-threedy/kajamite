@@ -4,12 +4,40 @@ export type Entry = {
   noteTitle?: string;
   kind?: "text" | "field" | "location" | "message";
   truncated?: boolean;
+  complete?: boolean;
   before?: string;
   after?: string;
   beforeRanges?: [number, number][];
   afterRanges?: [number, number][];
   message?: string;
 };
+export async function creationClaim(output: any): Promise<string | null> {
+  const receipt = output?.knowledge_change,
+    record = output?.record;
+  if (
+    receipt?.body_change?.kind !== "created" ||
+    !receipt.readback_verified ||
+    receipt.after?.identifier !== output.identifier ||
+    !Number.isInteger(record?.record_revision) ||
+    record.record_revision !== receipt.record_revision ||
+    record.record_revision !== output.committed_revision ||
+    typeof record.claim !== "string" ||
+    typeof receipt.record_claim_sha256 !== "string"
+  )
+    return null;
+  try {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(record.claim),
+    );
+    const hash = Array.from(new Uint8Array(digest), (value) =>
+      value.toString(16).padStart(2, "0"),
+    ).join("");
+    return hash === receipt.record_claim_sha256 ? record.claim : null;
+  } catch (_) {
+    return null;
+  }
+}
 export type View = {
   headline: string;
   subject: string;

@@ -1,5 +1,6 @@
 """Optional browser acceptance. Set KAJAMITE_BROWSER to an existing Chromium."""
 import html as html_module
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,6 +32,11 @@ class UiTests(unittest.TestCase):
                                  replacement=reflow_after['content'], metadata_keys=set())
         created = receipt.for_create({'file_path': 'Notes/new-note.md', 'content': 'New reader-facing explanation.',
                                       'metadata': {'title': 'generated-id', 'permalink': 'notes/new-note'}})
+        claim = '# Topic\n\n' + 'Complete synthetic explanation. ' * 100 + '\nFinal supported step: café 💡.'
+        verified = {'identifier': 'Notes/topic.md', 'committed_revision': 1,
+                    'record': {'record_revision': 1, 'claim': claim},
+                    'knowledge_change': receipt.for_create({'file_path': 'Notes/topic.md', 'content': '\n' + claim})}
+        verified['knowledge_change'].update(record_revision=1, record_claim_sha256=hashlib.sha256(claim.encode()).hexdigest())
         script = r'''
 const frame = document.querySelector('iframe');
 let requests = [], modeReply = 'fullscreen', sizes = 0, initialized;
@@ -90,6 +96,20 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(el('note-fields').textContent.includes('generated-id') && el('note-fields').textContent.includes('notes/new-note'), 'all initialized fields remain inspectable');
  await result({knowledge_change:CREATED}); el('toggle').click(); await wait();
  assert(el('note-fields').hidden, 'new result resets field disclosure');
+ await result(VERIFIED); el('toggle').click(); await wait();
+ const fullNote = [...el('changes').querySelectorAll('button')].find(button => button.textContent === 'Show full note');
+ assert(fullNote && !el('changes').textContent.includes('not the full note'), 'verified claim offers complete note');
+ fullNote.click(); await wait();
+ assert(el('changes').textContent.includes('Final supported step: café 💡.'), 'complete Unicode claim is readable beyond receipt limit');
+ for (const invalid of ['hash', 'revision', 'readback', 'legacy']) {
+  const value = structuredClone(VERIFIED);
+  if (invalid === 'hash') value.record.claim += ' Altered.';
+  if (invalid === 'revision') value.committed_revision = 2;
+  if (invalid === 'readback') value.knowledge_change.readback_verified = false;
+  if (invalid === 'legacy') delete value.knowledge_change.record_claim_sha256;
+  await result(value); el('toggle').click(); await wait();
+  assert(!el('changes').textContent.includes('Show full note') && el('changes').textContent.includes('not the full note'), 'unbound claim retains excerpt disclosure: '+invalid);
+ }
  for (const clipped of [CLIPPED, CLIPPED_GROUP]) {
   await result({knowledge_change:clipped});
   assert(el('overview').textContent.includes('Text changed outside the receipt excerpts'), 'clipped edit disclosed in summary');
@@ -145,7 +165,7 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
         script = ('const CHANGE = ' + json.dumps(change) + '; const UNCHANGED = ' + json.dumps(unchanged)
                   + '; const CLIPPED = ' + json.dumps(clipped) + '; const CLIPPED_GROUP = '
                   + json.dumps(clipped_group) + '; const REFLOW = ' + json.dumps(reflow)
-                  + '; const CREATED = ' + json.dumps(created) + ';\n' + script)
+                  + '; const CREATED = ' + json.dumps(created) + '; const VERIFIED = ' + json.dumps(verified) + ';\n' + script)
         script += '\nframe.srcdoc = ' + json.dumps(html()) + ';'
         self.run_browser(script)
 

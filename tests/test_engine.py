@@ -48,6 +48,15 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.backend = FakeBackend()
         self.engine = KnowledgeEngine(self.backend)
 
+    async def test_creation_claim_digest_preserves_markdown_framing(self):
+        record = source_record()
+        result = await KnowledgeEngine(FramingBackend()).record_create('facts', record)
+        change = result['knowledge_change']
+        self.assertEqual(hashlib.sha256(record['claim'].encode('utf-8')).hexdigest(), change['record_claim_sha256'])
+        self.assertNotEqual(change['record_claim_sha256'], change['after']['content_sha256'])
+        self.assertEqual(record['claim'], result['record']['claim'])
+        self.assertEqual(result['committed_revision'], change['record_revision'])
+
     async def test_creation_rejects_markdown_suffix_without_breaking_existing_ids(self):
         for identifier in ("topic.md", "topic.MD"):
             record = source_record()

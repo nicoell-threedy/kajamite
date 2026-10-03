@@ -198,6 +198,14 @@ count added, removed, and changed sources, including changes with stable source 
 Observation changes have a concise notice. Complete values remain in
 `metadata_changes` and raw receipt disclosure. The UI replaces the full record row
 only when this projection is present; older receipts retain their metadata view.
+
+Governed creation receipts also carry `record_claim_sha256`, the UTF-8 SHA-256 of
+the validated claim returned with the operation. This digest is separate from the
+stored Markdown body's digest, which can include backend framing. The UI offers
+the complete captured claim only when its digest, note identifier, and committed
+revision match a readback-verified creation receipt. This is the operation snapshot,
+not a fresh read of the current note. Older or mismatched results retain the bounded
+excerpt and its truncation notice; no extra note read or duplicate claim is added.
 This projection describes a saved operation, not current source freshness.
 
 Reuse checks source evidence for actual premises, including transitive premises.

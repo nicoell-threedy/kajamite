@@ -276,6 +276,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 raise MutationUncertain("Record create readback did not match; a write may have committed. Inspect current state before retrying.")
             change = receipt.for_create(after)
             change["record_changes"] = receipt.record_changes({}, persisted)
+            change["record_claim_sha256"] = hashlib.sha256(persisted["claim"].encode("utf-8")).hexdigest()
             return self._record_result(result, after, persisted, change, replayed=False, include_history=include_history)
 
     async def record_transition(

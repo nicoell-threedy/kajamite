@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { createBridge } from "./bridge";
 import {
   describe,
+  creationClaim,
   noteName,
   excerpt,
   changeExcerpts,
@@ -176,7 +177,11 @@ function Comparison({ item }: { item: Entry }) {
       )}
       {long && (
         <Button size="sm" variant="ghost" onClick={() => setFull(!full)}>
-          {full ? "Shorten excerpt" : "Show full excerpt"}
+          {full
+            ? "Show less"
+            : item.complete
+              ? "Show full note"
+              : "Show full excerpt"}
         </Button>
       )}
       {item.truncated && (
@@ -259,6 +264,30 @@ function Evidence({
 function App() {
   const state = useSyncExternalStore(bridge.subscribe, bridge.snapshot);
   const view = describe(state.result, state.error);
+  const [snapshot, setSnapshot] = useState<{
+    generation: number;
+    claim: string;
+  } | null>(null);
+  useEffect(() => {
+    let current = true;
+    if (!state.error)
+      creationClaim(state.result).then((claim) => {
+        if (current)
+          setSnapshot(
+            claim === null ? null : { generation: state.generation, claim },
+          );
+      });
+    return () => {
+      current = false;
+    };
+  }, [state.result, state.generation, state.error]);
+  if (!state.error && snapshot?.generation === state.generation) {
+    view.entries = view.entries.map((item) =>
+      item.title === "Added content"
+        ? { ...item, after: snapshot.claim, truncated: false, complete: true }
+        : item,
+    );
+  }
   const waiting = state.stage === "waiting",
     working = state.stage === "working",
     cancelled = state.stage === "cancelled",
