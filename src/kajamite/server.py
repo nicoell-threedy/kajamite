@@ -37,7 +37,7 @@ def guide():
     return files("kajamite").joinpath("SKILL.md").read_text(encoding="utf-8")
 
 
-def _operation(method):
+def _operation(method, *, readonly=False):
     """Keep deliberate engine errors visible without exposing unexpected exceptions."""
     @wraps(method)
     async def invoke(*args, **kwargs):
@@ -46,6 +46,8 @@ def _operation(method):
         except (MutationUncertain, KnowledgeError, ValueError) as error:
             raise ToolError(str(error)) from error
         except BackendError as error:
+            if readonly:
+                raise ToolError("Backend read failed. Check retrieval options and backend availability before retrying. No knowledge write was attempted.") from error
             raise ToolError("Backend operation failed. A pending write may have committed; inspect current state before retrying.") from error
     return invoke
 
@@ -62,8 +64,10 @@ def create_server(service, *, name="Kajamite", version=__version__,
     signature (for example with functools.wraps) and receipt fields. Deliberate
     engine errors are translated before the host wrapper receives them.
     """
+    readonly_tools = {"knowledge_search", "knowledge_read", "knowledge_list", "knowledge_context", "knowledge_related", "knowledge_inspect_collection"}
+
     def operation(tool_name, method):
-        invoke = _operation(getattr(service, method))
+        invoke = _operation(getattr(service, method), readonly=tool_name in readonly_tools)
         return wrap_operation(tool_name, invoke) if wrap_operation else invoke
 
     server_name = name
@@ -101,7 +105,7 @@ def create_server(service, *, name="Kajamite", version=__version__,
     for name, (method, description) in OPERATIONS.items():
         if name in mutation_tools:
             continue
-        readonly = name in {"knowledge_search", "knowledge_read", "knowledge_list", "knowledge_context", "knowledge_related", "knowledge_inspect_collection"}
+        readonly = name in readonly_tools
         server.tool(name=name, description=description, structured_output=True, annotations=ToolAnnotations(
             read_only_hint=readonly, destructive_hint=name in {"knowledge_edit", "knowledge_revise", "knowledge_move", "knowledge_record_transition", "knowledge_record_remove", "knowledge_record_maintain"},
             idempotent_hint=readonly, open_world_hint=False,

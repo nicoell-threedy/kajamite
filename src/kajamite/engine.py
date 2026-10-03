@@ -599,7 +599,8 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         return result
 
     async def list(self, namespace: str = "/", depth: int = 1, page: int = 1,
-                   page_size: int = 20, glob: str | None = None, sort: str | None = None,
+                   page_size: int = 20, glob: str | None = None,
+                   sort: Literal["title_asc", "title_desc", "updated_asc", "updated_desc"] | None = None,
                    *, mode: Literal["reuse", "inspect"] = "reuse",
                    request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         if mode not in {"reuse", "inspect"}:

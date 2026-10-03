@@ -151,7 +151,13 @@ not answer quality. Test outcomes are recorded in validation.md.
 ## Research and compatibility
 
 Reviewed against installed Basic Memory 0.23.0 and MCP SDK 2.1.1 on 2026-09-09.
-list_directory supplies nodes, depth, sorting and pagination; write_note accepts
+list_directory supplies nodes, depth, sorting and pagination. Listing accepts
+`title_asc`, `title_desc`, `updated_asc`, and `updated_desc`; omit sorting for the
+backend default. Unsupported values are rejected before backend access.
+Read-only MCP backend failures report a read failure without implying a pending
+knowledge write. Explicit mutation uncertainty remains visible, including when
+raised during a read. Unexpected backend details are not exposed.
+write_note accepts
 a directory; edit_note merges metadata; move_note handles directories and notes.
 Native results can be wrapped in structuredContent.result or returned as JSON
 text. Search total may be inexact, so continuation uses has_more.

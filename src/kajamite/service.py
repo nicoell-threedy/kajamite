@@ -349,10 +349,12 @@ class NoteOperations:
         page: int = 1,
         page_size: int = 20,
         glob: str | None = None,
-        sort: str | None = None,
+        sort: Literal["title_asc", "title_desc", "updated_asc", "updated_desc"] | None = None,
     ) -> dict[str, Any]:
         if depth < 1 or depth > 10 or page < 1 or page_size < 1 or page_size > 200:
             raise ValueError("depth must be 1..10, page >= 1, and page_size 1..200")
+        if sort is not None and sort not in {"title_asc", "title_desc", "updated_asc", "updated_desc"}:
+            raise ValueError("sort must be title_asc, title_desc, updated_asc, updated_desc, or omitted")
         payload = await self.backend.call(
             "list_directory",
             {"dir_name": self._namespace(namespace), "depth": depth,

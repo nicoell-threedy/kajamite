@@ -1,5 +1,21 @@
 # Validation
 
+## Read failures and directory ordering
+
+Read-only MCP backend failures report a read failure and no attempted knowledge
+write. Mutation backend failures retain the pending-write warning. Explicit
+mutation uncertainty takes precedence even when raised during a read. Live
+stdio tests verify these distinctions and suppress private backend details.
+
+The listing schema exposes the four supported orderings. Invalid ordering is
+rejected before backend access; valid ordering is forwarded unchanged.
+All 107 source checks pass, including four browser checks run separately.
+All 107 installed-wheel checks pass with one expected source-history skip.
+No receipt UI code changes are included.
+All three isolated native commissioning phases pass. A separate native read
+probe rejects an unsupported sort, accepts a supported sort, and reports disabled
+hybrid retrieval as a read failure. The probe preserves the seeded note bytes.
+
 ## Pre-write rejection
 
 The shared error view accepts an explicit `error.mutation_outcome="not_started"`

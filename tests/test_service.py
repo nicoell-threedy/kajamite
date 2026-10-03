@@ -347,6 +347,10 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("See Canonical.", resumed["note"]["content"])
 
     async def test_native_list_preserves_namespace_nodes_and_arguments(self):
+        before = len(self.backend.calls)
+        with self.assertRaisesRegex(ValueError, "sort must be title_asc"):
+            await self.service.list("foo", sort="name")
+        self.assertEqual(before, len(self.backend.calls))
         await self.service.create("One", "body", "foo")
         await self.service.create("Two", "body", "foo/nested")
         result = await self.service.list("foo", depth=2, page=1, page_size=20,
