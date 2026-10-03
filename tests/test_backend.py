@@ -3,7 +3,6 @@ import json
 import multiprocessing
 from pathlib import Path
 import tempfile
-import time
 import unittest
 
 from mcp.types import CallToolResult, TextContent
@@ -12,11 +11,12 @@ from kajamite.backend import Backend, BackendError, file_lock, unpack
 from kajamite.config import Settings
 
 
-def _hold_lock(path, ready, seconds):
+def _hold_lock(path, ready, release):
     async def hold():
         async with file_lock(Path(path)):
             ready.set()
-            await asyncio.sleep(seconds)
+            if not await asyncio.to_thread(release.wait, 30):
+                raise TimeoutError("Lock holder was not released")
 
     asyncio.run(hold())
 
@@ -159,8 +159,8 @@ class ConfigurationAndLockTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "mutation.lock"
             context = multiprocessing.get_context("spawn")
-            ready = context.Event()
-            process = context.Process(target=_hold_lock, args=(str(path), ready, 0.5))
+            ready, release = context.Event(), context.Event()
+            process = context.Process(target=_hold_lock, args=(str(path), ready, release))
             process.start()
             try:
                 self.assertTrue(await asyncio.to_thread(ready.wait, 5))
@@ -174,6 +174,7 @@ class ConfigurationAndLockTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(asyncio.CancelledError):
                     await waiter
             finally:
+                release.set()
                 await asyncio.to_thread(process.join, 5)
                 if process.is_alive():
                     process.terminate()

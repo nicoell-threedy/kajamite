@@ -1,5 +1,14 @@
 # Validation
 
+## Cross-process lock coordination
+
+The contention test holds the subprocess lock until an explicit release event.
+Timeout and cancellation are checked while that holder remains active; acquisition
+is checked again after release. All 104 source checks pass. A delayed contender
+is denied while the holder stays alive beyond the former fixed hold interval.
+This test change does not modify the lock implementation or establish the cause
+of every earlier concurrent-operation failure.
+
 ## Replay context
 
 Replay results without a change receipt identify the returned note and distinguish
