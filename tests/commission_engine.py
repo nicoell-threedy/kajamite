@@ -104,6 +104,21 @@ async def run(config):
         current = audited['record']
         evidence = {key: value | {'observed_at': '2026-01-01T00:00:01.000000Z'} for key, value in current['evidence'].items()}
         verification = current['verification'] | {'record_revision': 2, 'verified_at': '2026-01-01T00:00:01.000000Z'}
+        original_audit = await engine.read(audited['identifier'], mode='inspect')
+        for changes, message in [
+            ({'status': 'supported', 'superseded_by': None}, 'revision changes accept only'),
+            ({'evidence': evidence, 'verification': {key: value for key, value in verification.items()
+                if key not in {'record_revision', 'verified_at'}}},
+                'verification is missing fields: record_revision, verified_at'),
+        ]:
+            try:
+                await engine.record_transition(audited['identifier'], 'revise', 1, 'recheck',
+                    verification['verified_at'], 'reviewer', 'Recheck unchanged evidence', changes)
+            except KnowledgeError as error:
+                assert str(error).startswith(message)
+            else:
+                raise AssertionError('Invalid revision input must be rejected')
+            assert await engine.read(audited['identifier'], mode='inspect') == original_audit
         refreshed = await engine.record_transition(audited['identifier'], 'revise', 1, 'recheck',
             verification['verified_at'], 'reviewer', 'Recheck unchanged evidence',
             {'evidence': evidence, 'verification': verification})
@@ -114,6 +129,10 @@ async def run(config):
         assert refreshed['knowledge_change']['metadata_changes']
         assert refreshed['record']['evidence'] == evidence and refreshed['record']['verification'] == verification
         assert refreshed['record']['events'][0] == current['events'][0]
+        corrected_replay = await engine.record_transition(audited['identifier'], 'revise', 1, 'recheck',
+            verification['verified_at'], 'reviewer', 'Recheck unchanged evidence',
+            {'evidence': evidence, 'verification': verification})
+        assert corrected_replay['replayed'] and corrected_replay['record'] == refreshed['record']
         assert (await engine.read(audited['identifier'], request_scope=SCOPE))['content'] == current['claim']
         leaf = await engine.record_create('Details', make_record('linked-leaf'))
         overview_record = make_record('linked-overview')
@@ -232,7 +251,7 @@ async def run(config):
         assert removed['mutation']['deleted'] and removed['knowledge_change']['verification'] == 'backend_confirmed'
         assert removed['projection'] in {'absent', 'pending', 'unknown'}
     return {'status': 'passed', 'checks': ['native governed codec', 'request scope', 'plain preference',
-        'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay',
+        'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay', 'revision input rejection and corrected replay',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
         'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention', 'compact plain receipt with full structured audit', 'compact mutation projection and full audit readback', 'incoming governed links within a prose budget']}

@@ -292,6 +292,16 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             raise ValueError("operation_id must be non-empty text")
         if changes is not None and not isinstance(changes, Mapping):
             raise ValueError("changes must be an object")
+        if action == "revise" and changes is not None:
+            if set(changes) - {"claim", "replacements", "scope", "observations", "evidence", "verification", "depends_on"}:
+                raise KnowledgeError("revision changes accept only claim, replacements, scope, observations, evidence, verification, and depends_on; use lifecycle actions for status changes")
+            verification = changes.get("verification")
+            if verification is not None:
+                if not isinstance(verification, Mapping):
+                    raise KnowledgeError("verification must be an object")
+                missing = {"record_revision", "verified_at", "verifier", "outcome", "evidence_ids"} - set(verification)
+                if missing:
+                    raise KnowledgeError("verification is missing fields: " + ", ".join(sorted(missing)))
         await self._authorize(identifier, None)
         fingerprint = self._fingerprint(action, expected_revision, timestamp, actor, reason, changes)
         async with self.backend.mutation():

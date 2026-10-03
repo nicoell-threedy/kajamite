@@ -453,7 +453,7 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         verification = {**source_record()["verification"], "record_revision": 2,
                         "verified_at": "2026-01-01T00:00:01.000000Z"}
         cases = [
-            ({key: value for key, value in verification.items() if key != "verified_at"}, "verification.verified_at must be non-empty text"),
+            ({key: value for key, value in verification.items() if key != "verified_at"}, "verification is missing fields: verified_at"),
             ({**verification, "verified_at": "2026-01-01T00:00:01.000Z"}, "verification.verified_at must use canonical UTC microseconds"),
             ({**verification, "record_revision": 1}, "verification.record_revision must be 2"),
         ]
@@ -468,6 +468,21 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(KnowledgeError, "^record transition is invalid$"):
                 await self.engine.record_transition(identifier, "revise", 1, "opaque",
                     "2026-01-01T00:00:01.000000Z", "reviewer", "Clarify", {"claim": "Clarified claim."})
+
+    async def test_revision_shape_rejected_before_backend_access(self):
+        verification = {"verifier": "reviewer", "outcome": "supported", "evidence_ids": ["source"]}
+        for changes, message in [
+            ({"status": "supported"}, "revision changes accept only"),
+            ({"superseded_by": "replacement"}, "revision changes accept only"),
+            ({"synthetic_extra": "hidden value"}, "revision changes accept only"),
+            ({"verification": []}, "verification must be an object"),
+            ({"verification": verification}, "verification is missing fields: record_revision, verified_at"),
+        ]:
+            with self.subTest(changes=changes), self.assertRaisesRegex(KnowledgeError, message) as rejected:
+                await self.engine.record_transition("facts/missing.md", "revise", 1, "invalid-shape",
+                    "2026-01-01T00:00:01.000000Z", "reviewer", "Clarify", changes)
+            self.assertNotIn("hidden value", str(rejected.exception))
+            self.assertEqual([], self.backend.calls)
 
     async def test_transition_explains_evidence_shape_and_binding_without_mutation(self):
         created = await self.engine.record_create("facts", source_record())

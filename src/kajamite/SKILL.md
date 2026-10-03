@@ -194,6 +194,10 @@ Use knowledge_record_transition with the current expected revision and a unique 
 For creation or transitions, use include_history=false when only current fields and the change receipt are needed. This omits response snapshots, not stored history. Inspect the returned identifier for full history; check its revision against committed_revision because later writes can advance it.
 For a focused governed revision, use action="revise" and changes.replacements with
 objects containing find_text and replacement. Do not also supply changes.claim.
+Revision fields are claim, replacements, scope, observations, evidence,
+verification, and depends_on. Lifecycle actions own direct status changes.
+Supplied verification needs record_revision, verified_at, verifier, outcome,
+and evidence_ids. Missing fields are reported together before backend access.
 Selections apply to the original body and must be unique and disjoint. Unselected
 text remains unchanged. Fresh verification is required for supported status.
 Bind verification.record_revision to expected_revision + 1. Use six fractional

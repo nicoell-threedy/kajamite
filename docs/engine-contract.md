@@ -116,6 +116,11 @@ against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.
 Without fresh verification, a revised claim becomes `needs_revalidation`.
 The original transition request determines replay identity.
+Revision input accepts claim, replacements, scope, observations, evidence,
+verification, and depends_on. Unsupported fields and incomplete supplied
+verification objects are rejected before authorization or backend access.
+Missing verification fields are reported together. These checks do not infer
+verification values or weaken revision, timestamp, evidence, or replay checks.
 For supersession, changes can contain successor_identifier and successor_revision.
 The engine authorizes and reads that stored record under the same mutation lock,
 checks its revision and namespace, and applies the existing support, scope, and

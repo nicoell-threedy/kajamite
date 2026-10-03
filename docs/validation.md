@@ -1,5 +1,19 @@
 # Validation
 
+## Revision input diagnostics
+
+Unsupported revision fields and incomplete supplied verification objects fail
+before authorization or backend operations. The diagnostic lists supported fields
+or all missing verification fields without echoing arbitrary input values.
+Timestamp, revision, evidence-binding, and replay checks remain enforced.
+
+All 108 source checks and 108 installed-wheel checks pass, with one expected
+packaged source-history skip. All three native commissioning phases pass,
+including rejected input, preserved readback, corrected same-ID submission, and
+replay. A separate native MCP probe verifies delivery of the grouped diagnostic
+and unchanged note bytes after rejection. These controls do not measure model
+repair success or authorize a deployment.
+
 ## Maintenance state visibility
 
 The collapsed maintenance view reports how many newly saved notes need
