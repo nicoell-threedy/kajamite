@@ -135,8 +135,24 @@ def record_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[s
             if added or removed or updated:
                 result.append({"key": key, "message": f"Source references: {added} added, {removed} removed, {updated} updated. Exact values are in the raw receipt."})
         elif key == "observations":
+            prior = {item["observation_id"]: item for item in before.get(key, [])}
+            statements = [(prior[item["observation_id"]]["statement"], item["statement"], item["observation_id"])
+                          for item in after.get(key, []) if item["observation_id"] in prior
+                          and prior[item["observation_id"]]["statement"] != item["statement"]]
+            mirrored = set()
+            if len(statements) == 1:
+                old, new, observation_id = statements[0]
+                old_claim, new_claim = before.get("claim"), after.get("claim")
+                if all(isinstance(value, str) and value for value in (old, new, old_claim, new_claim)):
+                    old_start, new_start = old_claim.find(old), new_claim.find(new)
+                    # Uniqueness includes overlapping occurrences of a passage.
+                    if (min(old_start, new_start) >= 0 and old_claim.find(old, old_start + 1) < 0
+                            and new_claim.find(new, new_start + 1) < 0
+                            and old_claim.replace(old, new, 1) == new_claim):
+                        mirrored.add(observation_id)
             def support(record: dict[str, Any]) -> list[dict[str, Any]]:
-                return [item | {"statement": None} if item["statement"] == record.get("claim") else item
+                return [item | {"statement": None} if item["statement"] == record.get("claim")
+                        or item["observation_id"] in mirrored else item
                         for item in record.get("observations", [])]
             if support(before) != support(after):
                 result.append({"key": key, "message": f"Observation support changed ({len(after.get(key, []))} current observations). Exact values are in the raw receipt."})

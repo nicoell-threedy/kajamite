@@ -133,6 +133,24 @@ async def run(config):
             verification['verified_at'], 'reviewer', 'Recheck unchanged evidence',
             {'evidence': evidence, 'verification': verification})
         assert corrected_replay['replayed'] and corrected_replay['record'] == refreshed['record']
+        passage = 'Retry after 60 seconds.'
+        statement = 'Retry after 20 seconds.'
+        observations = [{'observation_id': 'purpose', 'statement': 'Purpose remains.', 'evidence_ids': ['manual']},
+                        {'observation_id': 'retry', 'statement': passage, 'evidence_ids': ['manual']}]
+        base = make_record('passage-support')
+        record = RecordEngine().create_record('passage-support', 'Purpose remains.\n\n' + passage,
+            SCOPE, observations, base['evidence'], base['verification'],
+            timestamp=STAMP, actor='reviewer', reason='Synthetic passages', event_id='created')
+        section = await engine.record_create('Passages', record)
+        section_update = await engine.record_transition(section['identifier'], 'revise', 1, 'passage-edit',
+            '2026-01-01T00:00:01.000000Z', 'reviewer', 'Correct one passage',
+            {'replacements': [{'find_text': passage, 'replacement': statement}],
+             'observations': [observations[0], observations[1] | {'statement': statement}],
+             'verification': base['verification'] | {'record_revision': 2, 'verified_at': '2026-01-01T00:00:01.000000Z'}})
+        assert section_update['knowledge_change']['record_changes'] == []
+        assert section_update['knowledge_change']['metadata_changes']
+        assert section_update['record']['observations'][1]['statement'] == statement
+        assert section_update['record']['events'][0] == record['events'][0]
         assert (await engine.read(audited['identifier'], request_scope=SCOPE))['content'] == current['claim']
         leaf = await engine.record_create('Details', make_record('linked-leaf'))
         overview_record = make_record('linked-overview')
@@ -251,7 +269,7 @@ async def run(config):
         assert removed['mutation']['deleted'] and removed['knowledge_change']['verification'] == 'backend_confirmed'
         assert removed['projection'] in {'absent', 'pending', 'unknown'}
     return {'status': 'passed', 'checks': ['native governed codec', 'request scope', 'plain preference',
-        'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay', 'revision input rejection and corrected replay',
+        'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay', 'revision input rejection and corrected replay', 'mirrored passage support projection',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
         'mixed inspection prose budget', 'word-level reflow receipts', 'stored receipt titles', 'governed heading title without rename', 'unchanged-evidence recheck audit retention', 'compact plain receipt with full structured audit', 'compact mutation projection and full audit readback', 'incoming governed links within a prose budget']}

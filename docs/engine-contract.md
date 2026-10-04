@@ -107,6 +107,13 @@ reference changes, evidence additions/removals, independent observation text,
 and changed support bindings remain reviewable. A source-reference update does
 not by itself establish that source behavior changed. Audit-only saves remain
 explicit in both single-note and batch summaries.
+One changed observation statement can also mirror a claim passage: both passages
+must be unique, including overlapping occurrences, and replacing the old passage
+must reproduce the complete new claim exactly. Its duplicate support notice is
+omitted, while changed bindings remain visible. Ambiguous passages, independent
+statements, unchanged-body reassignment, and multiple changed statements retain
+the support notice. Stored observations and complete raw record metadata are
+unchanged; only the semantic projection and its summary change.
 The plain-text fallback uses these semantic rows when present instead of printing
 the complete journal again. It retains passage hashes, coverage, saved record
 state, and committed revision. Full structured records and receipt metadata stay

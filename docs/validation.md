@@ -1,5 +1,20 @@
 # Validation
 
+## Mirrored passage support
+
+A single observation statement that exactly mirrors a unique body replacement
+does not add a duplicate support-change notice. Synthetic controls retain notices
+for changed evidence bindings, independent statements, unchanged-body reassignment,
+multiple changed statements, and ambiguous or overlapping passage occurrences.
+Projection leaves both input records unchanged. Native commissioning checks the
+saved statement, original history, and complete raw metadata independently.
+The 109-test source and installed-wheel suites pass, with one expected packaged
+source-history skip. Focused overlap controls and all three native commissioning
+phases pass. Two preserved multi-observation revisions were reprojected without
+changing their body diffs, record values, or raw metadata. Shared-host desktop
+and 320px views retain source and verifier changes while omitting the duplicate
+support notice. Installed-client acceptance remains separate.
+
 ## Revision input diagnostics
 
 Unsupported revision fields and incomplete supplied verification objects fail

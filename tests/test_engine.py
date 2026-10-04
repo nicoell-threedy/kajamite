@@ -429,6 +429,42 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(['observations'], [row['key'] for row in receipt.record_changes(snapshot, changed)])
         self.assertEqual(snapshot, updated['record'])
 
+    def test_record_receipt_suppresses_only_proven_single_passage_mirrors(self):
+        records = RecordEngine()
+        source = source_record()
+        old, new = 'Retry after 60 seconds.', 'Retry after 20 seconds.'
+        observations = [dict(observation_id='purpose', statement='Purpose remains.', evidence_ids=['source']),
+                        dict(observation_id='retry', statement=old, evidence_ids=['source'])]
+        before = records.create_record('passages', 'Purpose remains.\n\n' + old, source['scope'],
+            observations, source['evidence'], source['verification'],
+            timestamp=STAMP, actor='reviewer', reason='Synthetic passages', event_id='created')
+        verification = source['verification'] | {'record_revision': 2, 'verified_at': '2026-01-01T00:00:01.000000Z'}
+        def revise(claim, items, **fields):
+            return records.revise(before, claim=claim, observations=items, verification=verification,
+                timestamp=verification['verified_at'], actor='reviewer', reason='Synthetic correction', event_id='revised', **fields)
+        after = revise(before['claim'].replace(old, new), [observations[0], observations[1] | {'statement': new}])
+        original = copy.deepcopy((before, after))
+        self.assertEqual([], receipt.record_changes(before, after))
+        self.assertEqual(original, (before, after))
+        for claim, items in [
+            (before['claim'], [observations[0] | {'statement': old}, observations[1]]),
+            (after['claim'], [observations[0], observations[1] | {'statement': 'Independent support changed.'}]),
+            (after['claim'].replace('Purpose remains.', 'Purpose clarified.'),
+                [observations[0] | {'statement': 'Purpose clarified.'}, observations[1] | {'statement': new}]),
+        ]:
+            self.assertIn('observations', [row['key'] for row in receipt.record_changes(before, revise(claim, items))])
+        extra = source['evidence'] | {'extra': source['evidence']['source'] | {'reference': 'example:other'}}
+        verification['evidence_ids'] = ['source', 'extra']
+        rebound = revise(after['claim'], [observations[0], observations[1] | {'statement': new, 'evidence_ids': ['extra']}], evidence=extra)
+        self.assertIn('observations', [row['key'] for row in receipt.record_changes(before, rebound)])
+        ambiguous_before = {'claim': old + '\n' + old, 'observations': [observations[1]]}
+        ambiguous_after = {'claim': new + '\n' + old, 'observations': [observations[1] | {'statement': new}]}
+        self.assertIn('observations', [row['key'] for row in receipt.record_changes(ambiguous_before, ambiguous_after)])
+        for before_claim, after_claim, old_text, new_text in [('aaa', 'aba', 'aa', 'ab'), ('baa', 'aaa', 'ba', 'aa')]:
+            original = {'claim': before_claim, 'observations': [observations[1] | {'statement': old_text}]}
+            changed = {'claim': after_claim, 'observations': [observations[1] | {'statement': new_text}]}
+            self.assertIn('observations', [row['key'] for row in receipt.record_changes(original, changed)])
+
     async def test_record_receipt_projects_scope_and_same_count_evidence_changes(self):
         record = source_record()
         created = await self.engine.record_create("facts", record)
