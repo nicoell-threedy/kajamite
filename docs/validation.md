@@ -1,5 +1,18 @@
 # Validation
 
+## Duplicate creation outcomes
+
+An existing governed ID is rejected before a note write. Synthetic controls
+verify unchanged stored records and the absence of write calls. The explicit
+`not_started` marker survives embedding wrappers and standalone MCP serialization;
+uncertain or unmarked errors retain conservative behavior.
+
+All 111 source and installed-wheel checks pass, with one expected packaged
+source-history skip. Native commissioning passes, including duplicate rejection
+and independent record readback. Desktop and 320px shared-host inspection show
+the error and explicit no-write message without a pending-write warning. The
+rendered bundle is unchanged. Installed-client acceptance remains separate.
+
 ## Mirrored passage support
 
 A single observation statement that exactly mirrors a unique body replacement

@@ -283,3 +283,10 @@ New governed creation requires a bare `record_id` without a `.md` suffix. Direct
 segments belong in `namespace`; the backend supplies the Markdown extension.
 Filename-shaped IDs fail before backend access. Existing records with such IDs
 remain readable and can still receive lifecycle transitions; no IDs are rewritten.
+
+An existing governed ID found during creation preflight raises `KnowledgeError`
+with `mutation_outcome="not_started"`. No note write is attempted on this path.
+The MCP adapter preserves this marker on translated errors for embedding wrappers
+and emits it in structured standalone tool errors alongside the unchanged text.
+Other failures retain their existing semantics; explicit mutation uncertainty
+takes precedence.

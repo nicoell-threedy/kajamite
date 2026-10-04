@@ -17,7 +17,9 @@ from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID
 
 from kajamite import receipt
 from kajamite.errors import BackendError, MutationUncertain
-from kajamite.server import INSTRUCTIONS, OPERATIONS, create_server
+from kajamite.server import INSTRUCTIONS, OPERATIONS, create_server, _operation
+from kajamite.service import KnowledgeError
+from mcp.server.mcpserver.exceptions import ToolError
 from kajamite.ui import RESOURCE_URI
 from kajamite.ui import html, resource_uri
 
@@ -39,6 +41,10 @@ class ProtocolService:
         return {"identifier": identifier, "content": "reference", "content_is_data": True}
 
     async def create(self, title: str, content: str, namespace: str, kind="note", metadata=None) -> dict[str, Any]:
+        if title == "duplicate":
+            error = KnowledgeError("record ID is already present in this namespace")
+            error.mutation_outcome = "not_started"
+            raise error
         note = {
             "title": title,
             "file_path": f"{namespace.strip('/')}/{title}.md",
@@ -115,6 +121,18 @@ async def _serve():
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_host_wrapper_preserves_only_explicit_prewrite_outcome(self):
+        for error, expected in ((KnowledgeError('duplicate'), 'not_started'),
+                                (MutationUncertain('uncertain'), None),
+                                (KnowledgeError('unknown'), None)):
+            if str(error) != 'unknown':
+                error.mutation_outcome = 'not_started'
+            async def fail():
+                raise error
+            with self.assertRaises(ToolError) as caught:
+                await _operation(fail)()
+            self.assertEqual(expected, getattr(caught.exception, 'mutation_outcome', None))
+
     async def test_engine_search_schema_advertises_supported_modes(self):
         from kajamite.engine import KnowledgeEngine
         tools = await create_server(KnowledgeEngine(None)).list_tools()
@@ -218,6 +236,11 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(uncertain_read.is_error)
             self.assertIn("Mutation outcome is uncertain", str(uncertain_read.content))
             self.assertNotIn("No knowledge write", str(uncertain_read.content))
+            duplicate = await session.call_tool("knowledge_create", {"title": "duplicate", "content": "Synthetic", "namespace": "Notes"})
+            self.assertTrue(duplicate.is_error)
+            self.assertEqual("not_started", duplicate.structured_content["error"]["mutation_outcome"])
+            self.assertIn("already present", str(duplicate.content))
+            self.assertIn("already present", duplicate.structured_content["content"][0]["text"])
 
             resource = await session.read_resource("kajamite://guide")
             content = resource.model_dump(mode="json", by_alias=True)["contents"][0]["text"]

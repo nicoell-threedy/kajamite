@@ -57,6 +57,16 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(record['claim'], result['record']['claim'])
         self.assertEqual(result['committed_revision'], change['record_revision'])
 
+    async def test_duplicate_creation_reports_no_write_started(self):
+        await self.engine.record_create('facts', source_record())
+        before = copy.deepcopy(self.backend.notes)
+        self.backend.calls.clear()
+        with self.assertRaisesRegex(KnowledgeError, 'already present') as caught:
+            await self.engine.record_create('facts', source_record())
+        self.assertEqual('not_started', caught.exception.mutation_outcome)
+        self.assertEqual(before, self.backend.notes)
+        self.assertTrue(all(name in {'list_directory', 'read_note'} for name, _ in self.backend.calls))
+
     async def test_creation_rejects_markdown_suffix_without_breaking_existing_ids(self):
         for identifier in ("topic.md", "topic.MD"):
             record = source_record()

@@ -256,7 +256,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         await self._authorize((directory + "/" if directory else "") + value["record_id"] + ".md", None)
         async with self.backend.mutation():
             if any(item["record_id"] == value["record_id"] for item in await self._governed_inventory(namespace)):
-                raise KnowledgeError("record ID is already present in this namespace")
+                error = KnowledgeError("record ID is already present in this namespace")
+                error.mutation_outcome = "not_started"
+                raise error
             dependencies = await self._validate_dependencies(namespace, value)
             self._bind_dependencies(value, dependencies)
             metadata = {self._record_key: encode_record(value, value["claim"], self.records), self._operations_key: {}}

@@ -4,7 +4,7 @@ from functools import wraps
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.apps import Apps, ResourceCsp
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from . import __version__
 from .errors import BackendError, MutationUncertain
@@ -37,14 +37,22 @@ def guide():
     return files("kajamite").joinpath("SKILL.md").read_text(encoding="utf-8")
 
 
-def _operation(method, *, readonly=False):
+def _operation(method, *, readonly=False, structured_errors=False):
     """Keep deliberate engine errors visible without exposing unexpected exceptions."""
     @wraps(method)
     async def invoke(*args, **kwargs):
         try:
             return await method(*args, **kwargs)
         except (MutationUncertain, KnowledgeError, ValueError) as error:
-            raise ToolError(str(error)) from error
+            not_started = not isinstance(error, MutationUncertain) and getattr(error, "mutation_outcome", None) == "not_started"
+            if not_started and structured_errors:
+                return CallToolResult(content=[TextContent(type="text", text=str(error))],
+                    structured_content={"error": {"mutation_outcome": "not_started"},
+                                        "content": [{"type": "text", "text": str(error)}]}, is_error=True)
+            exposed = ToolError(str(error))
+            if not_started:
+                exposed.mutation_outcome = "not_started"
+            raise exposed from error
         except BackendError as error:
             if readonly:
                 raise ToolError("Backend read failed. Check retrieval options and backend availability before retrying. No knowledge write was attempted.") from error
@@ -67,7 +75,8 @@ def create_server(service, *, name="Kajamite", version=__version__,
     readonly_tools = {"knowledge_search", "knowledge_read", "knowledge_list", "knowledge_context", "knowledge_related", "knowledge_inspect_collection"}
 
     def operation(tool_name, method):
-        invoke = _operation(getattr(service, method), readonly=tool_name in readonly_tools)
+        invoke = _operation(getattr(service, method), readonly=tool_name in readonly_tools,
+                            structured_errors=wrap_operation is None)
         return wrap_operation(tool_name, invoke) if wrap_operation else invoke
 
     server_name = name

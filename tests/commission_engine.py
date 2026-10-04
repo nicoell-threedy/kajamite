@@ -31,7 +31,7 @@ def make_record(identifier="service-port", depends_on=None, *, mirror_claim=Fals
         depends_on=depends_on, timestamp=STAMP, actor='reviewer', reason='Manual reviewed', event_id='created')
 
 
-async def protocol_call(config, name, arguments):
+async def protocol_call(config, name, arguments, *, expect_error=False):
     host = Path(__file__).with_name('engine_protocol_host.py')
     params = StdioServerParameters(command=sys.executable, args=[str(host), '--config', str(config)],
                                   env={"PYTHONPATH": str(Path(kajamite.__file__).resolve().parents[1])})
@@ -47,7 +47,11 @@ async def protocol_call(config, name, arguments):
                 assert compact_schema['properties']['include_history']['default'] is True
             assert schema['properties']['retrieval_mode']['enum'] == ['text', 'semantic', 'hybrid']
             assert 'args' not in schema.get('properties', {}) and 'kwargs' not in schema.get('properties', {})
-            return unpack(await session.call_tool(name, arguments))
+            response = await session.call_tool(name, arguments)
+            if expect_error:
+                assert response.is_error
+                return response.structured_content
+            return unpack(response)
 
 
 async def run(config):
@@ -62,6 +66,16 @@ async def run(config):
             raise AssertionError('Filename-shaped record IDs must fail before creation')
         created = await engine.record_create('Records', make_record())
         identifier = created['identifier']
+        try:
+            await engine.record_create('Records', make_record())
+        except KnowledgeError as error:
+            assert error.mutation_outcome == 'not_started'
+        else:
+            raise AssertionError('Duplicate creation must be rejected before writing')
+        assert (await engine.read(identifier, mode='inspect'))['record'] == created['record']
+        duplicate = await protocol_call(config, 'knowledge_record_create',
+            {'namespace': 'Records', 'record': make_record()}, expect_error=True)
+        assert duplicate['error']['mutation_outcome'] == 'not_started'
         assert created['committed_revision'] == 1
         assert created['knowledge_change']['record_claim_sha256'] == hashlib.sha256(created['record']['claim'].encode('utf-8')).hexdigest()
         assert (await engine.read(identifier, request_scope=SCOPE))['content'] == make_record()['claim']
@@ -268,7 +282,7 @@ async def run(config):
         removed = await engine.record_remove(dependent['identifier'], 2)
         assert removed['mutation']['deleted'] and removed['knowledge_change']['verification'] == 'backend_confirmed'
         assert removed['projection'] in {'absent', 'pending', 'unknown'}
-    return {'status': 'passed', 'checks': ['native governed codec', 'request scope', 'plain preference',
+    return {'status': 'passed', 'checks': ['native governed codec', 'duplicate creation without write', 'request scope', 'plain preference',
         'restart continuity', 'source change withholding', 'revalidation', 'revision receipt', 'operation replay', 'revision input rejection and corrected replay', 'mirrored passage support projection',
         'MCP engine host', 'MCP lifecycle routing', 'CLI inspect without source checker',
         'native dependency maintenance', 'native removal evidence', 'compact supersession references',
