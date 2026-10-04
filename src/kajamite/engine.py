@@ -18,7 +18,7 @@ from typing import Any, Callable, Literal, Mapping
 
 from . import receipt
 from .errors import BackendError, MutationUncertain
-from .governance import RecordEngine, RecordError
+from .governance import RecordEngine, RecordError, VERIFICATION_OUTCOMES
 from .record_storage import decode_record, encode_record
 from .service import KnowledgeError, NoteOperations, apply_exact_replacements
 from .maintenance import MaintenanceOperations
@@ -314,6 +314,14 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 missing = {"record_revision", "verified_at", "verifier", "outcome", "evidence_ids"} - set(verification)
                 if missing:
                     raise KnowledgeError("verification is missing fields: " + ", ".join(sorted(missing)))
+        if action in {"revise", "revalidate"} and changes is not None:
+            verification = changes.get("verification")
+            if isinstance(verification, Mapping) and "outcome" in verification:
+                outcome = verification["outcome"]
+                if not isinstance(outcome, str) or outcome not in VERIFICATION_OUTCOMES:
+                    error = KnowledgeError("verification.outcome must be one of: " + ", ".join(VERIFICATION_OUTCOMES))
+                    error.mutation_outcome = "not_started"
+                    raise error
         await self._authorize(identifier, None)
         fingerprint = self._fingerprint(action, expected_revision, timestamp, actor, reason, changes)
         async with self.backend.mutation():

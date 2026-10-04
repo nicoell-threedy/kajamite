@@ -124,6 +124,8 @@ async def run(config):
         verification = current['verification'] | {'record_revision': 2, 'verified_at': '2026-01-01T00:00:01.000000Z'}
         original_audit = await engine.read(audited['identifier'], mode='inspect')
         for changes, message in [
+            ({'verification': verification | {'outcome': 'verified'}},
+                'verification.outcome must be one of: supported, disputed, needs_revalidation, unverifiable'),
             ({'status': 'supported', 'superseded_by': None}, 'revision changes accept only'),
             ({'evidence': evidence, 'verification': {key: value for key, value in verification.items()
                 if key not in {'record_revision', 'verified_at'}}},
@@ -136,6 +138,8 @@ async def run(config):
                     verification['verified_at'], 'reviewer', 'Recheck unchanged evidence', changes)
             except KnowledgeError as error:
                 assert str(error).startswith(message)
+                if message.startswith('verification.outcome'):
+                    assert error.mutation_outcome == 'not_started'
             else:
                 raise AssertionError('Invalid revision input must be rejected')
             assert await engine.read(audited['identifier'], mode='inspect') == original_audit

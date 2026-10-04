@@ -541,6 +541,19 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         after = {"observations": list(reversed(before["observations"]))}
         self.assertIn("Observation order changed.", receipt.record_changes(before, after)[0]["message"])
 
+    async def test_invalid_verification_outcome_is_rejected_before_backend_access(self):
+        verification = source_record()["verification"] | {"record_revision": 2}
+        for action in ("revise", "revalidate"):
+            for outcome in ("verified", "hidden value", "", None, True, [], {}):
+                with self.subTest(action=action, outcome=outcome), self.assertRaisesRegex(
+                        KnowledgeError, "verification.outcome must be one of: supported, disputed, needs_revalidation, unverifiable") as rejected:
+                    await self.engine.record_transition("facts/unread.md", action, 1, "correctable",
+                        "2026-01-01T00:00:01.000000Z", "reviewer", "Verify",
+                        {"verification": verification | {"outcome": outcome}})
+                self.assertEqual("not_started", rejected.exception.mutation_outcome)
+                self.assertNotIn("hidden value", str(rejected.exception))
+                self.assertEqual([], self.backend.calls)
+
     async def test_transition_explains_safe_verification_errors_without_mutation(self):
         created = await self.engine.record_create("facts", source_record())
         identifier = created["identifier"]

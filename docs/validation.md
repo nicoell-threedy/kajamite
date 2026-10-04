@@ -1,5 +1,17 @@
 # Validation
 
+## Verification outcome diagnostics
+
+Unrecognized verification outcomes in revise and revalidate requests are rejected
+before backend access. The diagnostic lists the four schema values and declares
+that no write was attempted. Lifecycle-specific validation remains unchanged.
+Synthetic controls cover strings and non-string values without echoing rejected
+input. Native checks preserve the record and accept a corrected request with the
+same operation ID. All 116 source and installed-wheel checks pass, with one
+expected packaged source-history skip. All three native commissioning phases and
+an embedding MCP probe pass. Desktop and 320px review show the actionable error
+without a pending-write warning. The UI bundle is unchanged.
+
 ## Revision conflict outcomes
 
 Stale expected revisions report the requested and observed numbers and an
