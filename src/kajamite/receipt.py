@@ -110,6 +110,21 @@ def _metadata_changes(
     ]
 
 
+def _entry_changes(added: set[str], removed: set[str], updated: set[str]) -> str | None:
+    parts = []
+    for action, identifiers in (("added", added), ("removed", removed), ("updated", updated)):
+        names = sorted(identifiers)
+        if names:
+            visible = []
+            for name in names[:3]:
+                if visible and len(", ".join([*visible, name])) > 128:
+                    break
+                visible.append(name)
+            remaining = f" (+{len(names) - len(visible)} more)" if len(names) > len(visible) else ""
+            parts.append(f"{len(names)} {action}: {', '.join(visible)}{remaining}")
+    return "; ".join(parts) + ". Exact values are in the raw receipt." if parts else None
+
+
 def record_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[str, Any]]:
     """Project validated records for review; complete metadata stays in the receipt."""
     result = []
@@ -127,13 +142,13 @@ def record_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[s
                 result.append(field | {"key": key + "." + field["key"]})
         elif key == "evidence":
             old, new = before.get(key, {}), after.get(key, {})
-            added, removed = len(new.keys() - old.keys()), len(old.keys() - new.keys())
-            updated = sum(
+            updated = {source for source in old.keys() & new.keys() if
                 {field: value for field, value in old[source].items() if field != "observed_at"}
                 != {field: value for field, value in new[source].items() if field != "observed_at"}
-                for source in old.keys() & new.keys())
-            if added or removed or updated:
-                result.append({"key": key, "message": f"Source references: {added} added, {removed} removed, {updated} updated. Exact values are in the raw receipt."})
+                }
+            message = _entry_changes(new.keys() - old.keys(), old.keys() - new.keys(), updated)
+            if message:
+                result.append({"key": key, "message": message})
         elif key == "observations":
             prior = {item["observation_id"]: item for item in before.get(key, [])}
             statements = [(prior[item["observation_id"]]["statement"], item["statement"], item["observation_id"])
@@ -155,7 +170,15 @@ def record_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[s
                         or item["observation_id"] in mirrored else item
                         for item in record.get("observations", [])]
             if support(before) != support(after):
-                result.append({"key": key, "message": f"Observation support changed ({len(after.get(key, []))} current observations). Exact values are in the raw receipt."})
+                current = {item["observation_id"]: item for item in after.get(key, [])}
+                old_support = {item["observation_id"]: item for item in support(before)}
+                new_support = {item["observation_id"]: item for item in support(after)}
+                updated = {identifier for identifier in prior.keys() & current.keys()
+                           if prior[identifier] != current[identifier] and old_support[identifier] != new_support[identifier]}
+                message = _entry_changes(current.keys() - prior.keys(), prior.keys() - current.keys(), updated)
+                if not message:
+                    message = ("Observation order changed." if prior == current else "Observation support changed.") + " Exact values are in the raw receipt."
+                result.append({"key": key, "message": message})
         else:
             result.append(change)
     return result

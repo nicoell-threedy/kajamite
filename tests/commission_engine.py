@@ -66,6 +66,10 @@ async def run(config):
             raise AssertionError('Filename-shaped record IDs must fail before creation')
         created = await engine.record_create('Records', make_record())
         identifier = created['identifier']
+        creation_fields = {item['key']: item for item in created['knowledge_change']['record_changes']}
+        assert '1 added: manual' in creation_fields['evidence']['message']
+        assert '1 added: manual' in creation_fields['observations']['message']
+        assert '1 added: manual' in created['knowledge_change_text']
         try:
             await engine.record_create('Records', make_record())
         except KnowledgeError as error:

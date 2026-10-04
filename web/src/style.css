@@ -221,7 +221,8 @@
   display: block;
   font-size: 12px;
 }
-.summary-line {
+.summary-line,
+.break-anywhere {
   overflow-wrap: anywhere;
 }
 .diff {

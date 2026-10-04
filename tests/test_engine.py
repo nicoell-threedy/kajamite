@@ -487,11 +487,53 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("needs_revalidation", fields["status"]["after"])
         self.assertFalse(fields["scope.system"]["after_present"])
         self.assertFalse(fields["scope.product"]["before_present"])
-        self.assertIn("0 added, 0 removed, 1 updated", fields["evidence"]["message"])
+        self.assertIn("1 updated: source", fields["evidence"]["message"])
+        self.assertNotIn("0 added", fields["evidence"]["message"])
         self.assertNotIn("events", fields)
         self.assertNotIn("record_revision", fields)
         self.assertIn("kajamite_record", [item["key"] for item in updated["knowledge_change"]["metadata_changes"]])
         self.assertEqual(evidence, updated["record"]["evidence"])
+
+    def test_record_review_names_only_changed_support_and_source_entries(self):
+        before = {"claim": "Old prose.", "evidence": {
+            "steady": {"reference": "example:stable", "observed_at": STAMP},
+            "moved": {"reference": "example:old"}, "removed": {"reference": "example:removed"}},
+            "observations": [
+                {"observation_id": "mirror", "statement": "Old prose.", "evidence_ids": ["steady"]},
+                {"observation_id": "detail", "statement": "Old independent statement.", "evidence_ids": ["steady"]},
+                {"observation_id": "untouched", "statement": "Old prose.", "evidence_ids": ["steady"]}]}
+        after = copy.deepcopy(before)
+        after["claim"] = "New prose."
+        after["observations"][0]["statement"] = "New prose."
+        after["observations"][1]["statement"] = "New independent statement."
+        after["evidence"]["steady"]["observed_at"] = "2026-01-01T00:00:01.000000Z"
+        after["evidence"]["moved"]["reference"] = "example:new"
+        del after["evidence"]["removed"]
+        after["evidence"]["added"] = {"reference": "example:added"}
+        saved = copy.deepcopy((before, after))
+        messages = {row["key"]: row["message"] for row in receipt.record_changes(before, after)}
+        self.assertIn("1 added: added; 1 removed: removed; 1 updated: moved", messages["evidence"])
+        self.assertNotIn("steady", messages["evidence"])
+        self.assertIn("1 updated: detail", messages["observations"])
+        self.assertNotIn("mirror", messages["observations"])
+        self.assertNotIn("untouched", messages["observations"])
+        self.assertEqual(saved, (before, after))
+
+    def test_record_review_bounds_named_entries_and_distinguishes_reordering(self):
+        short = {f"source-{index:02}": {"reference": f"example:{index}"} for index in range(12)}
+        message = receipt.record_changes({}, {"evidence": short})[0]["message"]
+        self.assertIn("12 added: source-00, source-01, source-02 (+9 more)", message)
+        self.assertNotIn("source-03", message)
+        evidence = {"source-" + "x" * 115 + f"-{index:02}": {"reference": f"example:{index}"} for index in range(12)}
+        message = receipt.record_changes({}, {"evidence": evidence})[0]["message"]
+        self.assertIn("12 added:", message)
+        self.assertIn("(+11 more)", message)
+        self.assertIn(sorted(evidence)[0], message)
+        self.assertNotIn(sorted(evidence)[1], message)
+        self.assertLess(len(message), 250)
+        before = {"observations": [{"observation_id": key, "statement": key, "evidence_ids": ["source"]} for key in ["one", "two"]]}
+        after = {"observations": list(reversed(before["observations"]))}
+        self.assertIn("Observation order changed.", receipt.record_changes(before, after)[0]["message"])
 
     async def test_transition_explains_safe_verification_errors_without_mutation(self):
         created = await self.engine.record_create("facts", source_record())

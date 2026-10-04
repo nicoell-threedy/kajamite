@@ -237,9 +237,13 @@ and client metadata forwarding. Default tool responses remain unchanged.
 
 Governed create and transition receipts include optional `record_changes` derived
 from validated before/after records. Scope and verification changes have individual
-field entries; status and dependency changes retain their values. Evidence entries
-count added, removed, and changed sources, including changes with stable source IDs.
-Observation changes have a concise notice. Complete values remain in
+field entries; status and dependency changes retain their values. Evidence and
+observation summaries name added, removed, and updated IDs. Zero-count groups
+are omitted. Each group shows at most three whole IDs within a bounded label
+budget and states how many additional IDs are omitted. Evidence rechecks that
+change only observation times remain secondary. Proven prose mirrors do not add
+duplicate support notices, and unchanged observations are not named as updated.
+Complete values remain in
 `metadata_changes` and raw receipt disclosure. The UI replaces the full record row
 only when this projection is present; older receipts retain their metadata view.
 

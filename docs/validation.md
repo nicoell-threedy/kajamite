@@ -1,5 +1,18 @@
 # Validation
 
+## Named support changes and narrow wrapping
+
+Source and observation summaries identify changed entries and omit zero-count
+groups. Synthetic controls retain additions, removals, rebinding, independent
+statement edits, order changes, and explicit omitted-entry counts. Rechecks and
+proven prose mirrors remain suppressed without changing records or raw metadata.
+The browser checks cover long unbroken IDs and JSON values in collapsed and
+expanded 320px views. The shared wrapping class keeps both within the frame.
+All 115 source and installed-wheel checks pass, with one expected packaged
+source-history skip. Native governed commissioning and the UI build, formatting,
+and type checks pass. Installed-client acceptance remains separate from the
+shared-host view.
+
 ## Explicit claim mirrors
 
 Revision requests can explicitly select whole-claim observations for an atomic
