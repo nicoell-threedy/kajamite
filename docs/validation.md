@@ -1,5 +1,12 @@
 # Validation
 
+## Search and collection descriptions
+
+Tool descriptions distinguish native-stream exhaustion from a complete inventory.
+They identify `partial` and `index_changed` and retain the live-snapshot limitation.
+All 119 source checks pass, including browser checks. This description change
+does not modify pagination, persistence, or receipt rendering.
+
 ## Changing search totals
 
 Search carries the last reported native total and any observed change through its
