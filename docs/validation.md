@@ -1,5 +1,15 @@
 # Validation
 
+## Observation input diagnostics
+
+Revision requests with empty, non-list, non-object, or incomplete observations
+fail before authorization and backend calls. Diagnostics name the entry index
+and missing fields without echoing submitted values. Native controls verify
+unchanged records after rejection and successful corrected submission and replay.
+All 111 source and installed-wheel checks pass, with one expected packaged
+source-history skip. All three native commissioning phases pass. These checks
+establish input diagnostics, not automatic synchronization of claim and observation text.
+
 ## Duplicate creation outcomes
 
 An existing governed ID is rejected before a note write. Synthetic controls

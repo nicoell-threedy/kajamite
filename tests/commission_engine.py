@@ -124,6 +124,8 @@ async def run(config):
             ({'evidence': evidence, 'verification': {key: value for key, value in verification.items()
                 if key not in {'record_revision', 'verified_at'}}},
                 'verification is missing fields: record_revision, verified_at'),
+            ({'observations': [{'statement': 'Updated synthetic observation.', 'evidence_ids': ['manual']}]},
+                'observations[0] is missing fields: observation_id'),
         ]:
             try:
                 await engine.record_transition(audited['identifier'], 'revise', 1, 'recheck',

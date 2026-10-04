@@ -126,7 +126,9 @@ The original transition request determines replay identity.
 Revision input accepts claim, replacements, scope, observations, evidence,
 verification, and depends_on. Unsupported fields and incomplete supplied
 verification objects are rejected before authorization or backend access.
-Missing verification fields are reported together. These checks do not infer
+Supplied observations must be a non-empty list of objects with observation_id,
+statement, and evidence_ids. Missing fields identify the list index without
+echoing submitted values. Missing verification fields are reported together. These checks do not infer
 verification values or weaken revision, timestamp, evidence, or replay checks.
 For supersession, changes can contain successor_identifier and successor_revision.
 The engine authorizes and reads that stored record under the same mutation lock,

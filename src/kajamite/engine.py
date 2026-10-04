@@ -297,6 +297,16 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         if action == "revise" and changes is not None:
             if set(changes) - {"claim", "replacements", "scope", "observations", "evidence", "verification", "depends_on"}:
                 raise KnowledgeError("revision changes accept only claim, replacements, scope, observations, evidence, verification, and depends_on; use lifecycle actions for status changes")
+            if "observations" in changes:
+                observations = changes["observations"]
+                if not isinstance(observations, list) or not observations:
+                    raise KnowledgeError("observations must be a non-empty list")
+                for index, observation in enumerate(observations):
+                    if not isinstance(observation, Mapping):
+                        raise KnowledgeError(f"observations[{index}] must be an object")
+                    missing = {"observation_id", "statement", "evidence_ids"} - set(observation)
+                    if missing:
+                        raise KnowledgeError(f"observations[{index}] is missing fields: " + ", ".join(sorted(missing)))
             verification = changes.get("verification")
             if verification is not None:
                 if not isinstance(verification, Mapping):

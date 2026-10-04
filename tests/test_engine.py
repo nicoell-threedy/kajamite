@@ -523,6 +523,14 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
             ({"synthetic_extra": "hidden value"}, "revision changes accept only"),
             ({"verification": []}, "verification must be an object"),
             ({"verification": verification}, "verification is missing fields: record_revision, verified_at"),
+            ({"observations": None}, "observations must be a non-empty list"),
+            ({"observations": []}, "observations must be a non-empty list"),
+            ({"observations": "hidden value"}, "observations must be a non-empty list"),
+            ({"observations": ["hidden value"]}, r"observations\[0\] must be an object"),
+            ({"observations": [{"statement": "hidden value", "evidence_ids": ["source"]}]},
+             r"observations\[0\] is missing fields: observation_id"),
+            ({"observations": [source_record()["observations"][0], {}]},
+             r"observations\[1\] is missing fields: evidence_ids, observation_id, statement"),
         ]:
             with self.subTest(changes=changes), self.assertRaisesRegex(KnowledgeError, message) as rejected:
                 await self.engine.record_transition("facts/missing.md", "revise", 1, "invalid-shape",
