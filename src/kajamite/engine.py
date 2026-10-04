@@ -642,7 +642,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 excluded.append({"identifier": identifier, "reason": str(error)})
         result["results"] = kept
         result["excluded"] = excluded
-        result["partial"] = bool(excluded or result["has_more"])
+        result["partial"] = bool(excluded or result["has_more"] or result["index_changed"])
         return result
 
     async def list(self, namespace: str = "/", depth: int = 1, page: int = 1,

@@ -85,7 +85,7 @@ class NoteOperations:
         fingerprint = hashlib.sha256(
             json.dumps(criteria, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        offset = self._decode_cursor(cursor, fingerprint) if cursor else 0
+        offset, native_total, index_changed = self._decode_cursor(cursor, fingerprint) if cursor else (0, None, False)
         native_page, skip = divmod(offset, self._native_page_size)
         native_page += 1
         results: list[dict[str, Any]] = []
@@ -111,6 +111,10 @@ class NoteOperations:
             rows = payload.get("results")
             if not isinstance(rows, list):
                 raise KnowledgeError("search_notes returned invalid results")
+            total = payload.get("total")
+            if type(total) is int and total >= 0:
+                index_changed = index_changed or (native_total is not None and total != native_total)
+                native_total = total
             pages += 1
             stopped = False
             for index, row in enumerate(rows):
@@ -144,11 +148,12 @@ class NoteOperations:
         scan_limited = pages == self._native_page_budget and not exhausted
         return {
             "results": results,
-            "next_cursor": None if exhausted else self._encode_cursor(offset, fingerprint),
+            "next_cursor": None if exhausted else self._encode_cursor(offset, fingerprint, native_total, index_changed),
             "has_more": not exhausted,
             "exhausted": exhausted,
             "retrieval_mode": retrieval_mode,
-            "complete_scope_search": exhausted and retrieval_mode == "text",
+            "complete_scope_search": exhausted and retrieval_mode == "text" and not index_changed,
+            "index_changed": index_changed,
             "scanned_results": scanned,
             "scan_limited": scan_limited,
         }
@@ -209,7 +214,8 @@ class NoteOperations:
             "candidates": candidates, "omissions": omissions, "errors": errors,
             "next_cursor": None if exhausted else self._encode_collection_cursor(scan["next_cursor"], fingerprint),
             "has_more": not exhausted, "exhausted": exhausted,
-            "scanned_notes": len(scan["results"]), "partial": bool(not exhausted or omissions or errors),
+            "scanned_notes": len(scan["results"]), "partial": bool(not exhausted or omissions or errors or scan.get("index_changed")),
+            "index_changed": bool(scan.get("index_changed")),
             "live": True,
         }
 
@@ -701,19 +707,24 @@ class NoteOperations:
         return False
 
     @staticmethod
-    def _encode_cursor(offset: int, fingerprint: str) -> str:
-        raw = json.dumps({"offset": offset, "fingerprint": fingerprint}, separators=(",", ":"))
+    def _encode_cursor(offset: int, fingerprint: str, native_total: int | None = None, index_changed: bool = False) -> str:
+        raw = json.dumps({"offset": offset, "fingerprint": fingerprint,
+                          "native_total": native_total, "index_changed": index_changed}, separators=(",", ":"))
         return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
     @staticmethod
-    def _decode_cursor(cursor: str, fingerprint: str) -> int:
+    def _decode_cursor(cursor: str, fingerprint: str) -> tuple[int, int | None, bool]:
         try:
             raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
             value = json.loads(raw)
             offset = value["offset"]
             if value["fingerprint"] != fingerprint or not isinstance(offset, int) or offset < 0:
                 raise ValueError
-            return offset
+            total = value.get("native_total")
+            changed = value.get("index_changed", False)
+            if total is not None and (type(total) is not int or total < 0) or type(changed) is not bool:
+                raise ValueError
+            return offset, total, changed
         except (binascii.Error, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             raise ValueError("cursor is invalid or belongs to another search") from error
 

@@ -1,5 +1,18 @@
 # Validation
 
+## Changing search totals
+
+Search carries the last reported native total and any observed change through its
+cursor. A changed total sets `index_changed`, withholds complete-search status,
+and marks engine search and collection inspection partial, including at exhaustion.
+Synthetic controls cover changes within and between calls, continued warnings,
+legacy cursors, malformed cursor fields, and absent totals. The installed-wheel
+suite passes 119 tests with one expected packaged source-history skip. The source
+suite passes with four browser checks skipped; those checks run in the wheel suite.
+The UI bundle is unchanged. Stable or missing totals do not prove snapshot
+consistency, and this safeguard does not repair native indexing or qualify an
+earlier failed continuation check.
+
 ## Verification outcome diagnostics
 
 Unrecognized verification outcomes in revise and revalidate requests are rejected

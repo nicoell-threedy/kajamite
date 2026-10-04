@@ -61,6 +61,13 @@ fallback without changing namespace meaning. The cost today is extra backend
 pages for sparse scopes. Pagination is live and does not guarantee a stable
 snapshot during concurrent changes.
 
+When reported native totals change within a scan or its cursor continuation,
+`index_changed=true` withholds `complete_scope_search` and marks engine search
+and collection inspection partial. Exhaustion still describes the end of the
+native stream; it does not establish absence from a changing index. Equal or
+missing totals cannot prove stability. Legacy cursors have no earlier total to
+compare. The signal does not trigger retries or expand the scan budget.
+
 ## Context and mutations
 
 knowledge_context selects either one namespace page or explicit note identifiers.
