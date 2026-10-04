@@ -195,7 +195,11 @@ For creation or transitions, use include_history=false when only current fields 
 For a focused governed revision, use action="revise" and changes.replacements with
 objects containing find_text and replacement. Do not also supply changes.claim.
 Revision fields are claim, replacements, scope, observations, evidence,
-verification, and depends_on. Lifecycle actions own direct status changes.
+verification, depends_on, and mirror_observations. Lifecycle actions own direct status changes.
+For declared whole-claim mirrors, select existing IDs in changes.mirror_observations
+with claim or replacements. Each selected statement must equal the current whole
+claim. Do not also supply observations. The revision updates selected statements
+atomically while preserving unselected statements and every evidence binding.
 Supplied verification needs record_revision, verified_at, verifier, outcome,
 and evidence_ids. Missing fields are reported together before backend access.
 Selections apply to the original body and must be unique and disjoint. Unselected

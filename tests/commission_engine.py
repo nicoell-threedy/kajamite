@@ -149,6 +149,21 @@ async def run(config):
             verification['verified_at'], 'reviewer', 'Recheck unchanged evidence',
             {'evidence': evidence, 'verification': verification})
         assert corrected_replay['replayed'] and corrected_replay['record'] == refreshed['record']
+        mirrored = await engine.record_create('Audit', make_record('explicit-mirror', mirror_claim=True))
+        mirror_args = {'identifier': mirrored['identifier'], 'action': 'revise', 'expected_revision': 1,
+            'operation_id': 'mirror-correction', 'timestamp': '2026-01-01T00:00:01.000000Z',
+            'actor': 'reviewer', 'reason': 'Correct explicitly selected support', 'changes': {
+                'replacements': [{'find_text': '8080', 'replacement': '9090'}], 'mirror_observations': ['manual'],
+                'verification': mirrored['record']['verification'] | {
+                    'record_revision': 2, 'verified_at': '2026-01-01T00:00:01.000000Z'}}}
+        mirror_result = await protocol_call(config, 'knowledge_record_transition', mirror_args)
+        mirror_current = (await engine.read(mirrored['identifier'], mode='inspect'))['record']
+        assert mirror_current == mirror_result['record']
+        assert mirror_current['claim'] == mirror_current['observations'][0]['statement'] == 'The service uses port 9090.\n'
+        assert mirror_current['evidence'] == mirrored['record']['evidence']
+        assert mirror_current['events'][:-1] == mirrored['record']['events']
+        mirror_replay = await protocol_call(config, 'knowledge_record_transition', mirror_args)
+        assert mirror_replay['replayed'] and mirror_replay['record'] == mirror_current
         passage = 'Retry after 60 seconds.'
         statement = 'Retry after 20 seconds.'
         observations = [{'observation_id': 'purpose', 'statement': 'Purpose remains.', 'evidence_ids': ['manual']},

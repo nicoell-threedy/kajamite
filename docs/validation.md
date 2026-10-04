@@ -1,5 +1,18 @@
 # Validation
 
+## Explicit claim mirrors
+
+Revision requests can explicitly select whole-claim observations for an atomic
+statement update. Synthetic controls preserve unselected equal-text observations,
+independent statements, evidence bindings, history, and original replay inputs.
+Empty, duplicate, missing, nonmatching, and conflicting selections reject without
+changing stored state or consuming the operation ID. Verification remains required.
+All 113 source and installed-wheel checks pass, with one expected packaged
+source-history skip. All three native commissioning phases pass, including MCP
+mutation, independent record readback, and replay of an explicit mirror revision.
+Shared-host desktop and 320px receipt inspection retains precise passage edits
+and secondary audit details. No UI bundle or record schema changes are required.
+
 ## Observation input diagnostics
 
 Revision requests with empty, non-list, non-object, or incomplete observations

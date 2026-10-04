@@ -123,8 +123,16 @@ against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.
 Without fresh verification, a revised claim becomes `needs_revalidation`.
 The original transition request determines replay identity.
+For observations deliberately maintained as whole-claim mirrors, a revision can
+set `mirror_observations` to their existing IDs. Supply a claim or replacements,
+and do not also supply observations. Every selected statement must equal the
+current complete claim. The engine resolves the selection inside the revision
+lock and updates those statements with the revised claim in the same write.
+Unselected statements and all evidence bindings remain unchanged. Equal text
+alone never selects an observation. Missing, duplicate, or nonmatching selections
+reject the revision. Normal verification and replay requirements still apply.
 Revision input accepts claim, replacements, scope, observations, evidence,
-verification, and depends_on. Unsupported fields and incomplete supplied
+verification, depends_on, and mirror_observations. Unsupported fields and incomplete supplied
 verification objects are rejected before authorization or backend access.
 Supplied observations must be a non-empty list of objects with observation_id,
 statement, and evidence_ids. Missing fields identify the list index without

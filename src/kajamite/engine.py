@@ -295,8 +295,8 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         if changes is not None and not isinstance(changes, Mapping):
             raise ValueError("changes must be an object")
         if action == "revise" and changes is not None:
-            if set(changes) - {"claim", "replacements", "scope", "observations", "evidence", "verification", "depends_on"}:
-                raise KnowledgeError("revision changes accept only claim, replacements, scope, observations, evidence, verification, and depends_on; use lifecycle actions for status changes")
+            if set(changes) - {"claim", "replacements", "scope", "observations", "evidence", "verification", "depends_on", "mirror_observations"}:
+                raise KnowledgeError("revision changes accept only claim, replacements, scope, observations, evidence, verification, depends_on, and mirror_observations; use lifecycle actions for status changes")
             if "observations" in changes:
                 observations = changes["observations"]
                 if not isinstance(observations, list) or not observations:
@@ -360,6 +360,21 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     raise KnowledgeError("claim and replacements cannot be supplied together")
                 transition_changes["claim"] = apply_exact_replacements(
                     record["claim"], transition_changes.pop("replacements"))
+            if action == "revise" and "mirror_observations" in transition_changes:
+                selection = transition_changes.pop("mirror_observations")
+                if (not isinstance(selection, list) or not selection
+                        or any(not isinstance(key, str) or not key for key in selection)
+                        or len(set(selection)) != len(selection)):
+                    raise KnowledgeError("mirror_observations must select unique observation IDs")
+                if "observations" in transition_changes or not isinstance(transition_changes.get("claim"), str):
+                    raise KnowledgeError("mirror_observations requires claim or replacements and cannot accompany observations")
+                observations = copy.deepcopy(record["observations"])
+                selected = [item for item in observations if item["observation_id"] in selection]
+                if len(selected) != len(selection) or any(item["statement"] != record["claim"] for item in selected):
+                    raise KnowledgeError("each selected observation must match the current complete claim")
+                for item in selected:
+                    item["statement"] = transition_changes["claim"]
+                transition_changes["observations"] = observations
             updated = self._transition(record, action, timestamp, actor, reason, operation_id, transition_changes)
             if action in {"revise", "revalidate", "supersede"}:
                 dependencies = await self._validate_dependencies(self._note_namespace(before), updated)

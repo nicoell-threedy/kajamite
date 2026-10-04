@@ -538,6 +538,52 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("hidden value", str(rejected.exception))
             self.assertEqual([], self.backend.calls)
 
+    async def test_explicit_claim_mirrors_preserve_unselected_observations_and_replay(self):
+        base = source_record()
+        observations = [
+            {"observation_id": "selected", "statement": base["claim"], "evidence_ids": ["source"]},
+            {"observation_id": "equal-but-unselected", "statement": base["claim"], "evidence_ids": ["source"]},
+            base["observations"][0],
+        ]
+        record = self.engine.records.create_record("mirrors", base["claim"], base["scope"], observations,
+            base["evidence"], base["verification"], timestamp=STAMP, actor="reviewer", reason="Reviewed", event_id="created")
+        created = await self.engine.record_create("facts", record)
+        changes = {"replacements": [{"find_text": "synthetic governed", "replacement": "corrected governed"}],
+                   "mirror_observations": ["selected"]}
+        arguments = (created["identifier"], "revise", 1, "mirror-update", "2026-01-01T00:00:01.000000Z",
+                     "reviewer", "Correct prose and selected support", changes)
+        updated = await self.engine.record_transition(*arguments)
+        actual = updated["record"]
+        self.assertEqual(observations[0] | {"statement": actual["claim"]}, actual["observations"][0])
+        self.assertEqual(observations[1:], actual["observations"][1:])
+        self.assertEqual(record["events"], actual["events"][:-1])
+        self.assertEqual(record["evidence"], actual["evidence"])
+        self.assertEqual("needs_revalidation", actual["status"])
+        saved = copy.deepcopy(self.backend.notes)
+        replay = await self.engine.record_transition(*arguments)
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(actual, replay["record"])
+        self.assertEqual(saved, self.backend.notes)
+        self.assertNotIn("claim", changes)
+
+    async def test_invalid_claim_mirrors_leave_revision_and_operation_identity_available(self):
+        record = source_record()
+        created = await self.engine.record_create("facts", record)
+        before = copy.deepcopy(self.backend.notes)
+        invalid = [{"claim": "Changed", "mirror_observations": value} for value in
+                   (None, [], "observed", [None], ["observed", "observed"], ["missing"], ["observed"])]
+        invalid += [{"mirror_observations": ["observed"]},
+                    {"claim": "Changed", "mirror_observations": ["observed"], "observations": record["observations"]}]
+        for changes in invalid:
+            with self.subTest(changes=changes), self.assertRaises(KnowledgeError):
+                await self.engine.record_transition(created["identifier"], "revise", 1, "correctable",
+                    "2026-01-01T00:00:01.000000Z", "reviewer", "Correct support", changes)
+            self.assertEqual(before, self.backend.notes)
+        corrected = await self.engine.record_transition(created["identifier"], "revise", 1, "correctable",
+            "2026-01-01T00:00:01.000000Z", "reviewer", "Correct support", {"claim": "Changed"})
+        self.assertEqual(2, corrected["record"]["record_revision"])
+        self.assertEqual(record["observations"], corrected["record"]["observations"])
+
     async def test_transition_explains_evidence_shape_and_binding_without_mutation(self):
         created = await self.engine.record_create("facts", source_record())
         identifier = created["identifier"]
