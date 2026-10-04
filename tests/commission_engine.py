@@ -168,6 +168,11 @@ async def run(config):
         assert mirror_current['events'][:-1] == mirrored['record']['events']
         mirror_replay = await protocol_call(config, 'knowledge_record_transition', mirror_args)
         assert mirror_replay['replayed'] and mirror_replay['record'] == mirror_current
+        stale = await protocol_call(config, 'knowledge_record_transition',
+            mirror_args | {'operation_id': 'stale-mirror-correction'}, expect_error=True)
+        assert stale['error']['mutation_outcome'] == 'not_started'
+        assert 'expected 1, found 2' in stale['content'][0]['text']
+        assert (await engine.read(mirrored['identifier'], mode='inspect'))['record'] == mirror_current
         passage = 'Retry after 60 seconds.'
         statement = 'Retry after 20 seconds.'
         observations = [{'observation_id': 'purpose', 'statement': 'Purpose remains.', 'evidence_ids': ['manual']},

@@ -328,7 +328,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     raise KnowledgeError("operation ID was already used with different inputs")
                 return self._record_result(None, before, record, None, replayed=True, include_history=include_history) | {"operation_revision": prior.get("committed_revision")}
             if record["record_revision"] != expected_revision:
-                raise KnowledgeError("record revision conflict; read the current record before retrying")
+                error = KnowledgeError(f"record revision conflict: expected {expected_revision}, found {record['record_revision']}; read the current record before retrying")
+                error.mutation_outcome = "not_started"
+                raise error
             if action == "evidence_health":
                 health = self._evidence_health(record, timestamp, actor, reason, changes)
                 if not health["mutated"]:

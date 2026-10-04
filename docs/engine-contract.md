@@ -123,6 +123,11 @@ against the current complete claim body. The expected record revision, body and
 history checks, operation identity, and cooperating-writer lock still apply.
 Without fresh verification, a revised claim becomes `needs_revalidation`.
 The original transition request determines replay identity.
+A revision mismatch rejects the attempted transition before a write. Its error
+reports the expected and observed revisions with `mutation_outcome=not_started`.
+This signal describes the rejected attempt; another writer can have changed the
+record. Read the current record before rebuilding the transition. Unknown errors
+and uncertain mutations retain their conservative outcome handling.
 For observations deliberately maintained as whole-claim mirrors, a revision can
 set `mirror_observations` to their existing IDs. Supply a claim or replacements,
 and do not also supply observations. Every selected statement must equal the

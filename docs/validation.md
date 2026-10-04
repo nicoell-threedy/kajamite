@@ -1,5 +1,15 @@
 # Validation
 
+## Revision conflict outcomes
+
+Stale expected revisions report the requested and observed numbers and an
+explicit no-write outcome. Source controls preserve note bytes and write-call
+counts. Standalone and embedding MCP paths retain the signal, while operation-ID
+conflicts and uncertain errors keep their existing handling. Native governed
+commissioning and shared-host desktop/320px inspection confirm the result.
+All 115 source and installed-wheel checks pass, with one expected packaged
+source-history skip. The UI bundle is unchanged.
+
 ## Named support changes and narrow wrapping
 
 Source and observation summaries identify changed entries and omit zero-count

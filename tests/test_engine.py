@@ -362,16 +362,22 @@ class KnowledgeEngineTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(replay["replayed"])
         self.assertEqual(edits, len([name for name, _ in self.backend.calls if name == "edit_note"]))
-        with self.assertRaisesRegex(KnowledgeError, "different inputs"):
+        with self.assertRaisesRegex(KnowledgeError, "different inputs") as reused_operation:
             await self.engine.record_transition(
                 identifier, "revise", 1, "revise-1", "2026-01-01T00:00:00.000001Z",
                 "reviewer", "Different", {"claim": "Other claim."},
             )
-        with self.assertRaisesRegex(KnowledgeError, "revision conflict"):
+        self.assertIsNone(getattr(reused_operation.exception, "mutation_outcome", None))
+        saved = copy.deepcopy(self.backend.notes)
+        with self.assertRaisesRegex(KnowledgeError, "revision conflict") as conflict:
             await self.engine.record_transition(
                 identifier, "retract", 1, "retract-1", "2026-01-01T00:00:00.000002Z",
                 "reviewer", "Retract",
             )
+        self.assertIn("expected 1, found 2", str(conflict.exception))
+        self.assertEqual("not_started", conflict.exception.mutation_outcome)
+        self.assertEqual(saved, self.backend.notes)
+        self.assertEqual(edits, len([name for name, _ in self.backend.calls if name == "edit_note"]))
 
     async def test_plain_receipt_projects_changes_and_keeps_saved_state_and_raw_audit(self):
         created = await self.engine.record_create('facts', source_record())
