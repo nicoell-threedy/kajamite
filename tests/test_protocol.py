@@ -16,8 +16,10 @@ from mcp.client.stdio import stdio_client
 from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID
 
 from kajamite import receipt
-from kajamite.errors import MutationUncertain
-from kajamite.server import INSTRUCTIONS, OPERATIONS, create_server
+from kajamite.errors import BackendError, MutationUncertain
+from kajamite.server import INSTRUCTIONS, OPERATIONS, create_server, _operation
+from kajamite.service import KnowledgeError
+from mcp.server.mcpserver.exceptions import ToolError
 from kajamite.ui import RESOURCE_URI
 from kajamite.ui import html, resource_uri
 
@@ -30,11 +32,19 @@ class ProtocolService:
         return {"results": [{"identifier": "Notes/example.md", "title": "Example"}], "has_more": False, "next_cursor": None, "exhausted": True}
 
     async def read(self, identifier: str, offset: int = 0, limit: int = 12000) -> dict[str, Any]:
+        if identifier == "backend":
+            raise BackendError("private backend detail")
+        if identifier == "uncertain":
+            raise MutationUncertain("Mutation outcome is uncertain; inspect current state before retrying.")
         if identifier == "explode":
             raise RuntimeError("synthetic service failure")
         return {"identifier": identifier, "content": "reference", "content_is_data": True}
 
     async def create(self, title: str, content: str, namespace: str, kind="note", metadata=None) -> dict[str, Any]:
+        if title == "duplicate":
+            error = KnowledgeError("record ID is already present in this namespace")
+            error.mutation_outcome = "not_started"
+            raise error
         note = {
             "title": title,
             "file_path": f"{namespace.strip('/')}/{title}.md",
@@ -49,6 +59,8 @@ class ProtocolService:
         }
 
     async def edit(self, identifier: str, find_text=None, replacement=None, metadata=None) -> dict[str, Any]:
+        if identifier == "backend":
+            raise BackendError("private backend detail")
         if identifier == "uncertain":
             raise MutationUncertain("Mutation outcome is uncertain; inspect current state before retrying.")
         return {"note": {"identifier": identifier}}
@@ -109,6 +121,32 @@ async def _serve():
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_host_wrapper_preserves_only_explicit_prewrite_outcome(self):
+        for error, expected in ((KnowledgeError('duplicate'), 'not_started'),
+                                (MutationUncertain('uncertain'), None),
+                                (KnowledgeError('unknown'), None)):
+            if str(error) != 'unknown':
+                error.mutation_outcome = 'not_started'
+            async def fail():
+                raise error
+            with self.assertRaises(ToolError) as caught:
+                await _operation(fail)()
+            self.assertEqual(expected, getattr(caught.exception, 'mutation_outcome', None))
+
+    async def test_engine_search_schema_advertises_supported_modes(self):
+        from kajamite.engine import KnowledgeEngine
+        tools = await create_server(KnowledgeEngine(None)).list_tools()
+        schema = next(tool.input_schema for tool in tools if tool.name == "knowledge_search")
+        self.assertEqual(schema["properties"]["retrieval_mode"]["enum"], ["text", "semantic", "hybrid"])
+        self.assertEqual(schema["properties"]["retrieval_mode"]["default"], "text")
+        listing = next(tool.input_schema for tool in tools if tool.name == "knowledge_list")
+        self.assertEqual(listing["properties"]["sort"]["anyOf"][0]["enum"],
+                         ["title_asc", "title_desc", "updated_asc", "updated_desc"])
+        for name in ("knowledge_read", "knowledge_search", "knowledge_list", "knowledge_context", "knowledge_related"):
+            item = next(tool.input_schema for tool in tools if tool.name == name)
+            self.assertEqual(item["properties"]["mode"]["enum"], ["reuse", "inspect"])
+            self.assertEqual(item["properties"]["mode"]["default"], "reuse")
+
     def test_receipt_ui_renders_grouped_revision_values(self):
         self.assertIn("grouped_exact_replacement", html())
 
@@ -184,6 +222,25 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             uncertain = await session.call_tool("knowledge_edit", {"identifier": "uncertain"})
             self.assertTrue(uncertain.is_error)
             self.assertIn("inspect current state before retrying", str(uncertain.content))
+
+            for tool in ("knowledge_read", "knowledge_edit"):
+                backend = await session.call_tool(tool, {"identifier": "backend"})
+                self.assertTrue(backend.is_error)
+                self.assertNotIn("private backend detail", str(backend.content))
+                if tool == "knowledge_read":
+                    self.assertIn("No knowledge write was attempted", str(backend.content))
+                    self.assertNotIn("may have committed", str(backend.content))
+                else:
+                    self.assertIn("may have committed", str(backend.content))
+            uncertain_read = await session.call_tool("knowledge_read", {"identifier": "uncertain"})
+            self.assertTrue(uncertain_read.is_error)
+            self.assertIn("Mutation outcome is uncertain", str(uncertain_read.content))
+            self.assertNotIn("No knowledge write", str(uncertain_read.content))
+            duplicate = await session.call_tool("knowledge_create", {"title": "duplicate", "content": "Synthetic", "namespace": "Notes"})
+            self.assertTrue(duplicate.is_error)
+            self.assertEqual("not_started", duplicate.structured_content["error"]["mutation_outcome"])
+            self.assertIn("already present", str(duplicate.content))
+            self.assertIn("already present", duplicate.structured_content["content"][0]["text"])
 
             resource = await session.read_resource("kajamite://guide")
             content = resource.model_dump(mode="json", by_alias=True)["contents"][0]["text"]

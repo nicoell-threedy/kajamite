@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import copy
 import hashlib
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
@@ -139,6 +141,18 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.backend = FakeBackend()
         self.service = KnowledgeService(self.backend)
+
+    async def test_qualified_wiki_path_matches_only_its_physical_note(self):
+        note = {"file_path": "notes/topic.md", "permalink": "project/notes/topic",
+                "title": "Topic", "content": "original", "frontmatter": {}}
+        self.backend.notes[note["file_path"]] = note
+        self.backend.fuzzy = note
+        self.assertEqual((await self.service.read("notes/topic"))["identifier"], "notes/topic.md")
+        changed = await self.service.edit("notes/topic", "original", "corrected")
+        self.assertEqual(changed["knowledge_change"]["after"]["identifier"], "notes/topic.md")
+        for identifier in ("topic", "other/topic", "notes/wrong", "Notes/topic", "notes/topic.md.backup"):
+            with self.subTest(identifier=identifier), self.assertRaisesRegex(KnowledgeError, "fuzzy match"):
+                await self.service.read(identifier)
 
     async def test_create_is_literal_and_same_titles_are_folder_distinct(self):
         first = await self.service.create("Record", "literal body", "/alpha", metadata={"status": "odd"})
@@ -335,6 +349,10 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("See Canonical.", resumed["note"]["content"])
 
     async def test_native_list_preserves_namespace_nodes_and_arguments(self):
+        before = len(self.backend.calls)
+        with self.assertRaisesRegex(ValueError, "sort must be title_asc"):
+            await self.service.list("foo", sort="name")
+        self.assertEqual(before, len(self.backend.calls))
         await self.service.create("One", "body", "foo")
         await self.service.create("Two", "body", "foo/nested")
         result = await self.service.list("foo", depth=2, page=1, page_size=20,
@@ -380,6 +398,76 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         second = await self.service.search(["wanted"], "needle", cursor=first["next_cursor"])
         self.assertEqual("wanted/hit.md", second["results"][0]["file_path"])
         self.assertTrue(second["exhausted"])
+
+    async def test_search_changed_totals_survive_continuation_and_withhold_completeness(self):
+        from kajamite.engine import KnowledgeEngine
+
+        for count in (60, 260):
+            with self.subTest(count=count):
+                self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")
+                                            for i in range(count)]
+                native = self.backend.call
+
+                async def changing(name, arguments):
+                    result = await native(name, arguments)
+                    if name == "search_notes" and arguments["page"] > 1:
+                        result["total"] -= 1
+                    return result
+
+                self.backend.call = changing
+                engine = KnowledgeEngine(self.backend)
+                result = await engine.search(["wanted"], "needle")
+                self.assertTrue(result["index_changed"])
+                if result["next_cursor"]:
+                    result = await engine.search(["wanted"], "needle", cursor=result["next_cursor"])
+                self.assertTrue(result["exhausted"])
+                self.assertFalse(result["has_more"])
+                self.assertFalse(result["complete_scope_search"])
+                self.assertTrue(result["index_changed"])
+                self.assertTrue(result["partial"])
+                inventory = await engine.inspect_collection("wanted")
+                if inventory["next_cursor"]:
+                    inventory = await engine.inspect_collection("wanted", cursor=inventory["next_cursor"])
+                self.assertTrue(inventory["partial"])
+                self.assertTrue(inventory["index_changed"])
+                self.backend.call = native
+
+    async def test_search_total_changes_between_calls_and_legacy_cursors(self):
+        self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")
+                                    for i in range(260)]
+        first = await self.service.search(["wanted"], "needle")
+        self.assertFalse(first["index_changed"])
+        self.backend.search_rows.pop()
+        last = await self.service.search(["wanted"], "needle", cursor=first["next_cursor"])
+        self.assertTrue(last["index_changed"])
+        self.assertFalse(last["complete_scope_search"])
+        cursor = first["next_cursor"]
+        legacy = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+        legacy.pop("native_total")
+        legacy.pop("index_changed")
+        encode = lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+        last = await self.service.search(["wanted"], "needle", cursor=encode(legacy))
+        self.assertFalse(last["index_changed"])
+        self.assertTrue(last["complete_scope_search"])
+        for fields in ({"native_total": -1}, {"native_total": True}, {"index_changed": "false"}):
+            with self.assertRaises(ValueError):
+                await self.service.search(["wanted"], "needle", cursor=encode(legacy | fields))
+
+    async def test_search_missing_totals_do_not_invent_a_change(self):
+        self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")
+                                    for i in range(60)]
+        native = self.backend.call
+
+        async def without_total(name, arguments):
+            result = await native(name, arguments)
+            if name == "search_notes":
+                result.pop("total")
+            return result
+
+        self.backend.call = without_total
+        result = await self.service.search(["wanted"], "needle")
+        self.assertFalse(result["index_changed"])
+        self.assertTrue(result["complete_scope_search"])
 
     async def test_context_is_bounded_preserves_listing_and_reports_partial_errors(self):
         await self.service.create("Long", "a" * 20, "docs")

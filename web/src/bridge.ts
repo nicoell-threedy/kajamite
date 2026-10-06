@@ -1,4 +1,5 @@
 import { applyTheme, type HostContext, type Theme } from "./theme";
+import { reviewResult } from "./model";
 export type Snapshot = {
   result: any;
   error: boolean;
@@ -23,6 +24,7 @@ export function createBridge(theme: Theme) {
     disconnected: false,
   };
   let nextId = 1;
+  let resultRequest = 0;
   const subscribers = new Set<() => void>();
   const pending = new Map<
     number,
@@ -85,11 +87,18 @@ export function createBridge(theme: Theme) {
     }
     if (m.method === "ui/notifications/host-context-changed")
       context(m.params ?? {});
-    if (m.method === "ui/notifications/tool-result")
-      result(m.params?.structuredContent ?? m.params, m.params?.isError);
-    if (m.method === "ui/notifications/tool-input")
+    if (m.method === "ui/notifications/tool-result") {
+      const request = ++resultRequest;
+      reviewResult(m.params).then((value) => {
+        if (request === resultRequest) result(value, m.params?.isError);
+      });
+    }
+    if (m.method === "ui/notifications/tool-input") {
+      resultRequest++;
       result({}, false, "working");
-    if (m.method === "ui/notifications/tool-cancelled")
+    }
+    if (m.method === "ui/notifications/tool-cancelled") {
+      resultRequest++;
       result(
         {
           content: [
@@ -99,6 +108,7 @@ export function createBridge(theme: Theme) {
         true,
         "cancelled",
       );
+    }
   });
   applyTheme(theme, {});
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () =>

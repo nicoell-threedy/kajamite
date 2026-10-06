@@ -1,15 +1,50 @@
 export type Entry = {
   title: string;
   note?: string;
+  noteTitle?: string;
   kind?: "text" | "field" | "location" | "message";
   truncated?: boolean;
+  complete?: boolean;
   before?: string;
   after?: string;
+  beforeRanges?: [number, number][];
+  afterRanges?: [number, number][];
   message?: string;
 };
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+export async function creationClaim(output: any): Promise<string | null> {
+  const receipt = output?.knowledge_change,
+    record = output?.record;
+  if (
+    receipt?.body_change?.kind !== "created" ||
+    !receipt.readback_verified ||
+    receipt.after?.identifier !== output.identifier ||
+    !Number.isInteger(record?.record_revision) ||
+    record.record_revision !== receipt.record_revision ||
+    record.record_revision !== output.committed_revision ||
+    typeof record.claim !== "string" ||
+    typeof receipt.record_claim_sha256 !== "string"
+  )
+    return null;
+  try {
+    const hash = await sha256(record.claim);
+    return hash === receipt.record_claim_sha256 ? record.claim : null;
+  } catch (_) {
+    return null;
+  }
+}
 export type View = {
   headline: string;
   subject: string;
+  subjectTitle: string;
   counts: string;
   status: string;
   scope: string;
@@ -20,8 +55,75 @@ export type View = {
 };
 const text = (value: any) =>
   typeof value === "string" ? value : JSON.stringify(value);
+export const isMutationSummary = (value: any) =>
+  value?.response_format === "kajamite-mutation-summary/1" &&
+  value.ok === true &&
+  value.readback_verified === true &&
+  !value.partial &&
+  !value.errors?.length &&
+  typeof value.operation === "string" &&
+  value.operation.length > 0 &&
+  typeof value.receipt_id === "string" &&
+  value.receipt_id.length > 0 &&
+  typeof value.identifier === "string" &&
+  value.identifier.length > 0 &&
+  Number.isInteger(value.committed_revision) &&
+  value.committed_revision > 0 &&
+  typeof value.record_status === "string" &&
+  value.record_status.length > 0 &&
+  typeof value.replayed === "boolean";
+
+export async function reviewResult(params: any): Promise<any> {
+  const summary = params?.structuredContent ?? params;
+  if (params?.isError || !isMutationSummary(summary)) return summary;
+  const serialized = params?._meta?.audit_snapshot;
+  if (
+    typeof serialized !== "string" ||
+    typeof summary.audit?.sha256 !== "string"
+  )
+    return summary;
+  let snapshot;
+  try {
+    if ((await sha256(serialized)) !== summary.audit.sha256) return summary;
+    snapshot = JSON.parse(serialized);
+  } catch (_) {
+    return summary;
+  }
+  if (
+    snapshot?.ok !== true ||
+    snapshot.partial ||
+    snapshot.errors?.length ||
+    snapshot.receipt_id !== summary.receipt_id ||
+    snapshot.operation !== summary.operation ||
+    snapshot.identifier !== summary.identifier ||
+    snapshot.committed_revision !== summary.committed_revision ||
+    snapshot.replayed !== summary.replayed ||
+    snapshot.record?.record_revision !== summary.committed_revision ||
+    snapshot.record?.status !== summary.record_status ||
+    snapshot.knowledge_change?.record_revision !== summary.committed_revision ||
+    snapshot.knowledge_change?.readback_verified !== true ||
+    (snapshot.knowledge_change?.after?.identifier ??
+      snapshot.knowledge_change?.before?.identifier) !== summary.identifier
+  )
+    return summary;
+  return snapshot;
+}
 const noun = (n: number, singular: string) =>
   `${n} ${singular}${n === 1 ? "" : "s"}`;
+export function changeCounts(entries: Entry[]): string {
+  const text = entries.filter((entry) => entry.kind === "text").length;
+  const fields = entries.filter((entry) => entry.kind === "field").length;
+  const other = entries.length - text - fields;
+  return (
+    [
+      text ? noun(text, "text edit") : "",
+      fields ? noun(fields, "field update") : "",
+      other ? noun(other, "other change") : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || "0 changes"
+  );
+}
 const valueText = (value: any) => (value == null ? "None" : value.preview);
 export const noteName = (path: string) =>
   path.split("/").filter(Boolean).at(-1)?.replace(/\.md$/i, "") || path;
@@ -29,11 +131,28 @@ const fieldLabel = (key: string) => {
   const name = key.replace(/[_-]/g, " ");
   return name.charAt(0).toUpperCase() + name.slice(1);
 };
+const attentionStates = [
+  "disputed",
+  "needs_revalidation",
+  "unverifiable",
+  "superseded",
+  "retracted",
+];
+const fieldValue = (key: string, value: any) =>
+  key === "status" &&
+  typeof value === "string" &&
+  ["supported", ...attentionStates].includes(value)
+    ? fieldLabel(value)
+    : text(value);
 export const excerpt = (value = "", limit = 120) => {
   const line = value.replace(/\s+/g, " ").trim();
   return line.length > limit ? line.slice(0, limit).trimEnd() + "…" : line;
 };
-export function changeExcerpts(before = "", after = ""): [string, string] {
+export function changeExcerpts(
+  before = "",
+  after = "",
+  limit = 110,
+): [string, string] {
   let start = 0;
   while (
     start < Math.min(before.length, after.length) &&
@@ -42,7 +161,7 @@ export function changeExcerpts(before = "", after = ""): [string, string] {
     start++;
   const offset = Math.max(0, start - 35);
   const crop = (s: string) =>
-    (offset ? "…" : "") + excerpt(s.slice(offset), 110);
+    (offset ? "…" : "") + excerpt(s.slice(offset), limit);
   return [crop(before), crop(after)];
 }
 const receiptEntries = (receipt: any) => {
@@ -60,6 +179,8 @@ const receiptEntries = (receipt: any) => {
           truncated: item.before?.truncated || item.after?.truncated,
           before: valueText(item.before),
           after: valueText(item.after),
+          beforeRanges: item.before?.changed_ranges,
+          afterRanges: item.after?.changed_ranges,
         });
     }
   } else if (body && body.before?.sha256 !== body.after?.sha256) {
@@ -75,16 +196,37 @@ const receiptEntries = (receipt: any) => {
       truncated: body.before?.truncated || body.after?.truncated,
       before: valueText(body.before),
       after: valueText(body.after),
+      beforeRanges: body.before?.changed_ranges,
+      afterRanges: body.after?.changed_ranges,
     });
   }
-  for (const change of receipt.metadata_changes ?? []) {
-    if (["record_revision"].includes(change.key)) continue;
+  for (const entry of result) {
+    if (entry.truncated && entry.before === entry.after)
+      entry.message =
+        "Text changed outside the receipt excerpts. The changed passage is unavailable.";
+  }
+  const projected = Array.isArray(receipt.record_changes);
+  for (const change of [
+    ...(receipt.metadata_changes ?? []).filter(
+      (change: any) => !projected || change.key !== "kajamite_record",
+    ),
+    ...(projected ? receipt.record_changes : []),
+  ]) {
+    if (["record_revision", "kajamite_operations"].includes(change.key))
+      continue;
     result.push({
-      title: fieldLabel(change.key),
+      title: change.key.split(".").map(fieldLabel).join(" · "),
       note: title,
       kind: "field",
-      before: change.before_present === false ? "Absent" : text(change.before),
-      after: change.after_present === false ? "Absent" : text(change.after),
+      before:
+        change.before_present === false
+          ? "Absent"
+          : fieldValue(change.key, change.before),
+      after:
+        change.after_present === false
+          ? "Absent"
+          : fieldValue(change.key, change.after),
+      message: change.message,
     });
   }
   if (receipt.operation.startsWith("move"))
@@ -95,7 +237,10 @@ const receiptEntries = (receipt: any) => {
       before: receipt.before?.identifier,
       after: receipt.after?.identifier,
     });
-  return result;
+  return result.map((entry) => ({
+    ...entry,
+    noteTitle: receipt.after?.title ?? receipt.before?.title,
+  }));
 };
 const isChanged = (receipt: any) =>
   receipt.operation.startsWith("move") ||
@@ -106,6 +251,7 @@ export function describe(output: any = {}, isError = false): View {
   const view: View = {
     headline: "",
     subject: "",
+    subjectTitle: "",
     counts: "",
     status: "",
     scope:
@@ -120,8 +266,19 @@ export function describe(output: any = {}, isError = false): View {
     const completed = Array.isArray(output.completed) ? output.completed : null;
     if (isError) {
       view.headline = "Operation failed";
-      view.status =
-        "A write may have committed. Inspect current state before retrying.";
+      const notStarted =
+        output.error?.mutation_outcome === "not_started" &&
+        output.ok !== true &&
+        !receipt &&
+        !completed?.length &&
+        !output.mutation &&
+        output.committed_revision == null &&
+        !output.replayed &&
+        !output.accepted_state &&
+        !output.error?.accepted_state;
+      view.status = notStarted
+        ? "No write was attempted. Correct the input and retry."
+        : "A write may have committed. Inspect current state before retrying.";
       entries = [
         {
           title: "Error",
@@ -132,6 +289,26 @@ export function describe(output: any = {}, isError = false): View {
               .join("\n") || "No successful change receipt was returned.",
         },
       ];
+    } else if (isMutationSummary(output)) {
+      view.headline = output.replayed
+        ? "Previously completed"
+        : "Operation completed";
+      view.subject = output.identifier;
+      view.counts = `Revision ${output.committed_revision}`;
+      view.status = `Saved record state: ${fieldLabel(output.record_status)}.`;
+      view.attention = `${view.status} Complete diff unavailable in this view.`;
+      entries = [
+        {
+          title: "Operation summary",
+          message: output.change_summary || "No change summary supplied.",
+        },
+      ];
+      if (output.audit?.available === false)
+        entries.push({
+          title: "Audit readback",
+          message:
+            "The operation completed, but audit readback is unavailable. Do not repeat the write to recover its receipt.",
+        });
     } else if (output.preview) {
       view.headline = "Preview · nothing saved";
       view.subject = output.identifier ?? "";
@@ -155,13 +332,17 @@ export function describe(output: any = {}, isError = false): View {
           : "No content changes";
       view.subject =
         receipt.after?.identifier ?? receipt.before?.identifier ?? "";
+      view.subjectTitle = receipt.after?.title ?? receipt.before?.title ?? "";
       entries = receiptEntries(receipt);
       const n = receipt.affected_notes;
       const count =
         receipt.affected_notes_exact && Number.isInteger(n)
           ? noun(n, "note")
           : "Note count not reported";
-      view.counts = `${count} · ${noun(entries.length, "change")}`;
+      view.counts =
+        receipt.operation === "create"
+          ? count
+          : `${count} · ${changeCounts(entries)}`;
       view.status = receipt.readback_verified
         ? "Saved result checked"
         : "Backend confirmed";
@@ -205,9 +386,43 @@ export function describe(output: any = {}, isError = false): View {
         output.partial || errors.length
           ? "Inspect failed items before retrying."
           : "Maintenance result checked";
+      const revalidation = new Set(
+        fresh
+          .filter(
+            (item: any) =>
+              item.knowledge_change.readback_verified &&
+              item.knowledge_change.record_changes?.some(
+                (change: any) =>
+                  change.key === "status" &&
+                  change.after === "needs_revalidation",
+              ),
+          )
+          .map((item: any) => item.knowledge_change.after?.identifier)
+          .filter(
+            (identifier: any) =>
+              typeof identifier === "string" && identifier.length > 0,
+          ),
+      ).size;
+      if (revalidation && !output.partial && !errors.length)
+        view.attention = `${noun(revalidation, "saved note")} ${revalidation === 1 ? "needs" : "need"} revalidation.`;
     } else if (output.replayed) {
       view.headline = "Previously completed";
-      view.status = "Earlier result · no new write";
+      view.subject = output.identifier ?? "";
+      view.counts = [
+        Number.isInteger(output.operation_revision) &&
+        output.operation_revision > 0
+          ? `Operation revision ${output.operation_revision}`
+          : "",
+        Number.isInteger(output.committed_revision) &&
+        output.committed_revision > 0
+          ? `Returned revision ${output.committed_revision}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      view.status = "Earlier operation · no new write";
+      if (attentionStates.includes(output.record?.status))
+        view.attention = `Returned record state: ${fieldLabel(output.record.status)}.`;
     } else {
       view.headline = "No change receipt returned";
       view.status = "Inspect the tool result before claiming a saved change.";
@@ -222,6 +437,7 @@ export function describe(output: any = {}, isError = false): View {
   for (const key of [
     "headline",
     "subject",
+    "subjectTitle",
     "counts",
     "status",
     "scope",
@@ -240,12 +456,14 @@ export function describe(output: any = {}, isError = false): View {
   view.entries = entries.map((item) => ({
     ...item,
     title: text(item.title),
+    noteTitle: text(item.noteTitle),
     before: text(item.before),
     after: text(item.after),
     message: text(item.message),
   }));
   if (isError) view.action = "View error";
   else if (output?.preview) view.action = "View preview";
+  else if (isMutationSummary(output)) view.action = "View summary";
   else if (!entries.length) view.action = "View details";
   const receipt = output?.knowledge_change;
   if (
@@ -255,9 +473,18 @@ export function describe(output: any = {}, isError = false): View {
     (!receipt &&
       !completedResult(output) &&
       !output?.preview &&
-      !output?.replayed)
+      !output?.replayed &&
+      !isMutationSummary(output))
   )
     view.attention = view.status;
+  if (
+    receipt &&
+    !output.replayed &&
+    !output.preview &&
+    !view.attention &&
+    attentionStates.includes(output.record?.status)
+  )
+    view.attention = `Saved record state: ${fieldLabel(output.record.status)}.`;
   if (receipt && !output.replayed) {
     if (receipt.operation === "create") view.summary = "New note saved.";
     else if (receipt.operation === "remove_note")
@@ -266,14 +493,22 @@ export function describe(output: any = {}, isError = false): View {
       view.summary = "Location changed; note text is unchanged.";
     else if (!view.entries.length)
       view.summary = isChanged(receipt)
-        ? "Record tracking updated; note text and other fields are unchanged."
+        ? "Audit information updated; note text unchanged."
         : "The note already matches the requested edit.";
   }
   if (output?.replayed)
-    view.summary = "This is an earlier result. Nothing was written again.";
+    view.summary =
+      "This operation completed earlier. Nothing was written again.";
   if (output?.preview) view.summary = "Proposed text. Nothing has been saved.";
   if (completedResult(output) && !view.entries.length)
-    view.summary = "No notes changed in this operation.";
+    view.summary = output.completed.some(
+      (item: any) =>
+        !item.replayed &&
+        item.knowledge_change &&
+        isChanged(item.knowledge_change),
+    )
+      ? "Audit information updated; note text unchanged."
+      : "No notes changed in this operation.";
   if (isError) view.summary = excerpt(view.entries[0]?.message, 220);
   if (!view.entries.length && !view.summary)
     view.summary = "No saved change could be confirmed from this result.";

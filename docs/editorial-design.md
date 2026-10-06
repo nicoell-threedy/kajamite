@@ -68,6 +68,11 @@ note returned by `knowledge_context` expose `content_sha256`, even when their
 `content` field is truncated. Metadata is deliberately outside this precondition:
 the revision operation neither accepts nor writes metadata. A generic revision
 of a governed record is rejected before mutation.
+To update selected passages in a governed claim, use
+`knowledge_record_transition` with `action="revise"`, the current expected
+record revision, a unique operation ID, and `changes.replacements` in the same
+shape. This transition has no preview mode. It preserves unselected claim text
+and record history; without fresh verification the result needs revalidation.
 
 `replacements` contains one to 100 ordered entries. Each nonempty `find_text`
 must occur exactly once in the same original complete body. Selected ranges must be disjoint; repeated or

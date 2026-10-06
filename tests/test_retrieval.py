@@ -1,5 +1,7 @@
 """Native retrieval mappings retain explicit scope and bounded context."""
 import unittest
+from kajamite.errors import BackendError
+from kajamite.engine import KnowledgeEngine
 from kajamite.service import NoteOperations
 from test_service import FakeBackend
 
@@ -18,6 +20,24 @@ class GraphBackend(FakeBackend):
         return await super().call(name, arguments)
 
 
+
+class PagedGraphBackend(FakeBackend):
+    def __init__(self, pages):
+        super().__init__()
+        self.pages = pages
+
+    async def call(self, name, arguments):
+        if name == 'build_context':
+            self.calls.append((name, dict(arguments)))
+            return self.pages[min(arguments['page'] - 1, len(self.pages) - 1)]
+        return await super().call(name, arguments)
+
+
+def graph_page(paths, more=False, related_count=0):
+    return {'results': [{'primary_result': {'type': 'entity', 'file_path': 'Notes/start.md'},
+                         'related_results': [{'type': 'entity', 'file_path': path} for path in paths]}],
+            'has_more': more, 'metadata': {'related_count': related_count}}
+
 class RetrievalTests(unittest.IsolatedAsyncioTestCase):
     async def test_graph_uses_native_paths_then_rereads_only_in_scope(self):
         backend = GraphBackend()
@@ -31,6 +51,59 @@ class RetrievalTests(unittest.IsolatedAsyncioTestCase):
         arguments = next(args for name, args in backend.calls if name == 'build_context')
         self.assertIsNone(arguments['timeframe'])
         self.assertEqual(result['graph']['excluded_outside_scope'], 1)
+
+    async def test_graph_reads_continuation_before_claiming_completeness(self):
+        for service_type in (NoteOperations, KnowledgeEngine):
+            with self.subTest(service=service_type.__name__):
+                backend = PagedGraphBackend([graph_page(['Notes/first.md'], True),
+                                             graph_page(['Notes/first.md', 'Notes/last.md'])])
+                service = service_type(backend)
+                for title in ('Start', 'First', 'Last'):
+                    await service.create(title, title, 'Notes')
+                kwargs = {'mode': 'inspect'} if service_type is KnowledgeEngine else {}
+                result = await service.related('Notes/start.md', ['Notes'], **kwargs)
+                self.assertEqual(['Notes/start.md', 'Notes/first.md', 'Notes/last.md'],
+                                 [note['identifier'] for note in result['notes']])
+                self.assertFalse(result['partial'])
+                self.assertFalse(result['graph']['limited'])
+                self.assertEqual([1, 2], [args['page'] for name, args in backend.calls if name == 'build_context'])
+
+    async def test_graph_preserves_limits_and_unique_scope_exclusions_across_pages(self):
+        scenarios = [
+            ([graph_page([], True)], 10, True, 5, 0),
+            ([graph_page(['Notes/first.md'], True, 100), graph_page([])], 10, True, 2, 0),
+            ([graph_page(['Notes/first.md', 'Notes/last.md'], True)], 2, True, 1, 0),
+            ([graph_page(['Outside/secret.md'], True), graph_page(['Outside/secret.md'])], 10, False, 2, 1),
+        ]
+        for pages, max_notes, limited, count, excluded in scenarios:
+            with self.subTest(pages=count, limited=limited, excluded=excluded):
+                backend = PagedGraphBackend(pages)
+                service = KnowledgeEngine(backend)
+                for title in ('Start', 'First', 'Last'):
+                    await service.create(title, title, 'Notes')
+                await service.create('Secret', 'hidden body', 'Outside')
+                result = await service.related('Notes/start.md', ['Notes'], max_notes=max_notes, mode='inspect')
+                self.assertEqual(limited, result['graph']['limited'])
+                self.assertEqual(excluded, result['graph']['excluded_outside_scope'])
+                self.assertTrue(result['partial'])
+                self.assertNotIn('hidden body', str(result))
+                self.assertLessEqual(len(result['notes']), max_notes)
+                self.assertEqual(count, len([args for name, args in backend.calls if name == 'build_context']))
+
+    async def test_graph_continuation_failure_is_not_reported_as_complete(self):
+        backend = PagedGraphBackend([graph_page([], True)])
+        service = KnowledgeEngine(backend)
+        await service.create('Start', 'start', 'Notes')
+        original = backend.call
+
+        async def unavailable_page(name, arguments):
+            if name == 'build_context' and arguments['page'] == 2:
+                raise BackendError('continuation unavailable')
+            return await original(name, arguments)
+
+        backend.call = unavailable_page
+        with self.assertRaisesRegex(BackendError, 'continuation unavailable'):
+            await service.related('Notes/start.md', ['Notes'], mode='inspect')
 
     async def test_search_binds_category_and_item_type_to_cursor(self):
         backend = FakeBackend()

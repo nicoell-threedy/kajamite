@@ -14,12 +14,13 @@ import copy
 import hashlib
 import inspect
 import json
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Literal, Mapping
 
 from . import receipt
 from .errors import BackendError, MutationUncertain
-from .governance import RecordEngine, RecordError
-from .service import KnowledgeError, NoteOperations
+from .governance import RecordEngine, RecordError, VERIFICATION_OUTCOMES
+from .record_storage import decode_record, encode_record
+from .service import KnowledgeError, NoteOperations, apply_exact_replacements
 from .maintenance import MaintenanceOperations
 
 
@@ -75,7 +76,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         if not isinstance(raw, dict):
             raise KnowledgeError("governed record metadata is invalid")
         try:
-            record = self.records.validate_record(raw)
+            record = decode_record(raw, str(note.get("content", "")), self.records)
         except RecordError as error:
             raise KnowledgeError("governed record metadata is invalid") from error
         if not self._body_matches(str(note.get("content", "")), record["claim"]):
@@ -240,21 +241,27 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 page += 1
         return records
 
-    async def record_create(self, namespace: str, record: Mapping[str, Any]) -> dict[str, Any]:
+    async def record_create(self, namespace: str, record: Mapping[str, Any], *, include_history: bool = True) -> dict[str, Any]:
+        if type(include_history) is not bool:
+            raise ValueError("include_history must be a bool")
         try:
             value = self.records.validate_record(record)
         except RecordError as error:
             raise KnowledgeError("record creation input is invalid") from error
         if value["record_revision"] != 1 or value["events"][0]["action"] != "create":
             raise KnowledgeError("record_create requires a revision-one create record")
+        if value["record_id"].lower().endswith(".md"):
+            raise KnowledgeError("record_id is an identifier, not a Markdown filename; omit the .md suffix")
         directory = self._namespace(namespace).lstrip("/")
         await self._authorize((directory + "/" if directory else "") + value["record_id"] + ".md", None)
-        metadata = {self._record_key: value, self._operations_key: {}}
         async with self.backend.mutation():
             if any(item["record_id"] == value["record_id"] for item in await self._governed_inventory(namespace)):
-                raise KnowledgeError("record ID is already present in this namespace")
+                error = KnowledgeError("record ID is already present in this namespace")
+                error.mutation_outcome = "not_started"
+                raise error
             dependencies = await self._validate_dependencies(namespace, value)
             self._bind_dependencies(value, dependencies)
+            metadata = {self._record_key: encode_record(value, value["claim"], self.records), self._operations_key: {}}
             result = await self._call_mutation("write_note", {
             "title": value["record_id"], "content": value["claim"], "directory": directory,
                 "note_type": self._governed_kind, "metadata": metadata, "overwrite": False,
@@ -270,18 +277,51 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if persisted != value:
                 raise MutationUncertain("Record create readback did not match; a write may have committed. Inspect current state before retrying.")
             change = receipt.for_create(after)
-            return self._record_result(result, after, persisted, change, replayed=False)
+            change["record_changes"] = receipt.record_changes({}, persisted)
+            change["record_claim_sha256"] = hashlib.sha256(persisted["claim"].encode("utf-8")).hexdigest()
+            return self._record_result(result, after, persisted, change, replayed=False, include_history=include_history)
 
     async def record_transition(
         self, identifier: str, action: str, expected_revision: int, operation_id: str,
         timestamp: str, actor: str, reason: str, changes: Mapping[str, Any] | None = None,
+        *, include_history: bool = True,
     ) -> dict[str, Any]:
+        if type(include_history) is not bool:
+            raise ValueError("include_history must be a bool")
         if not isinstance(expected_revision, int) or isinstance(expected_revision, bool) or expected_revision < 1:
             raise ValueError("expected_revision must be a positive integer")
         if not isinstance(operation_id, str) or not operation_id:
             raise ValueError("operation_id must be non-empty text")
         if changes is not None and not isinstance(changes, Mapping):
             raise ValueError("changes must be an object")
+        if action == "revise" and changes is not None:
+            if set(changes) - {"claim", "replacements", "scope", "observations", "evidence", "verification", "depends_on", "mirror_observations"}:
+                raise KnowledgeError("revision changes accept only claim, replacements, scope, observations, evidence, verification, depends_on, and mirror_observations; use lifecycle actions for status changes")
+            if "observations" in changes:
+                observations = changes["observations"]
+                if not isinstance(observations, list) or not observations:
+                    raise KnowledgeError("observations must be a non-empty list")
+                for index, observation in enumerate(observations):
+                    if not isinstance(observation, Mapping):
+                        raise KnowledgeError(f"observations[{index}] must be an object")
+                    missing = {"observation_id", "statement", "evidence_ids"} - set(observation)
+                    if missing:
+                        raise KnowledgeError(f"observations[{index}] is missing fields: " + ", ".join(sorted(missing)))
+            verification = changes.get("verification")
+            if verification is not None:
+                if not isinstance(verification, Mapping):
+                    raise KnowledgeError("verification must be an object")
+                missing = {"record_revision", "verified_at", "verifier", "outcome", "evidence_ids"} - set(verification)
+                if missing:
+                    raise KnowledgeError("verification is missing fields: " + ", ".join(sorted(missing)))
+        if action in {"revise", "revalidate"} and changes is not None:
+            verification = changes.get("verification")
+            if isinstance(verification, Mapping) and "outcome" in verification:
+                outcome = verification["outcome"]
+                if not isinstance(outcome, str) or outcome not in VERIFICATION_OUTCOMES:
+                    error = KnowledgeError("verification.outcome must be one of: " + ", ".join(VERIFICATION_OUTCOMES))
+                    error.mutation_outcome = "not_started"
+                    raise error
         await self._authorize(identifier, None)
         fingerprint = self._fingerprint(action, expected_revision, timestamp, actor, reason, changes)
         async with self.backend.mutation():
@@ -294,21 +334,63 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if prior is not None:
                 if prior.get("fingerprint") != fingerprint:
                     raise KnowledgeError("operation ID was already used with different inputs")
-                return self._record_result(None, before, record, None, replayed=True) | {"operation_revision": prior.get("committed_revision")}
+                return self._record_result(None, before, record, None, replayed=True, include_history=include_history) | {"operation_revision": prior.get("committed_revision")}
             if record["record_revision"] != expected_revision:
-                raise KnowledgeError("record revision conflict; read the current record before retrying")
+                error = KnowledgeError(f"record revision conflict: expected {expected_revision}, found {record['record_revision']}; read the current record before retrying")
+                error.mutation_outcome = "not_started"
+                raise error
             if action == "evidence_health":
                 health = self._evidence_health(record, timestamp, actor, reason, changes)
                 if not health["mutated"]:
-                    result = self._record_result(None, before, record, None, replayed=False)
+                    result = self._record_result(None, before, record, None, replayed=False, include_history=include_history)
                     result.update(outcome=health["outcome"], mutated=False, transient=health["transient"])
                     return result
-            updated = self._transition(record, action, timestamp, actor, reason, operation_id, changes)
+            transition_changes = dict(changes or {})
+            if action == "supersede" and "successor_identifier" in transition_changes:
+                if set(transition_changes) != {"successor_identifier", "successor_revision"}:
+                    raise KnowledgeError("supersede requires successor_identifier and successor_revision")
+                revision = transition_changes["successor_revision"]
+                if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
+                    raise KnowledgeError("successor_revision must be a positive integer")
+                successor_identifier = transition_changes["successor_identifier"]
+                if not isinstance(successor_identifier, str) or not successor_identifier:
+                    raise KnowledgeError("successor_identifier must be a note identifier")
+                await self._authorize(successor_identifier, None)
+                successor_note = await self._read_full(successor_identifier)
+                if self._note_namespace(successor_note) != self._note_namespace(before):
+                    raise KnowledgeError("successor must be in the same namespace")
+                successor = self._record_from_note(successor_note)
+                if successor is None:
+                    raise KnowledgeError("successor must be a governed record")
+                if successor["record_revision"] != revision:
+                    raise KnowledgeError("successor revision conflict; read the current successor before retrying")
+                transition_changes = {"successor": successor}
+            if action == "revise" and "replacements" in transition_changes:
+                if "claim" in transition_changes:
+                    raise KnowledgeError("claim and replacements cannot be supplied together")
+                transition_changes["claim"] = apply_exact_replacements(
+                    record["claim"], transition_changes.pop("replacements"))
+            if action == "revise" and "mirror_observations" in transition_changes:
+                selection = transition_changes.pop("mirror_observations")
+                if (not isinstance(selection, list) or not selection
+                        or any(not isinstance(key, str) or not key for key in selection)
+                        or len(set(selection)) != len(selection)):
+                    raise KnowledgeError("mirror_observations must select unique observation IDs")
+                if "observations" in transition_changes or not isinstance(transition_changes.get("claim"), str):
+                    raise KnowledgeError("mirror_observations requires claim or replacements and cannot accompany observations")
+                observations = copy.deepcopy(record["observations"])
+                selected = [item for item in observations if item["observation_id"] in selection]
+                if len(selected) != len(selection) or any(item["statement"] != record["claim"] for item in selected):
+                    raise KnowledgeError("each selected observation must match the current complete claim")
+                for item in selected:
+                    item["statement"] = transition_changes["claim"]
+                transition_changes["observations"] = observations
+            updated = self._transition(record, action, timestamp, actor, reason, operation_id, transition_changes)
             if action in {"revise", "revalidate", "supersede"}:
                 dependencies = await self._validate_dependencies(self._note_namespace(before), updated)
                 if updated["status"] == "supported":
                     self._bind_dependencies(updated, dependencies)
-            metadata = {self._record_key: updated,
+            metadata = {self._record_key: encode_record(updated, updated["claim"], self.records),
                         self._operations_key: {**operations, operation_id: {"fingerprint": fingerprint, "committed_revision": updated["record_revision"]}}}
             body_changed = updated["claim"] != record["claim"]
             arguments: dict[str, Any] = {"identifier": self._identifier(before), "metadata": metadata}
@@ -329,7 +411,14 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                                       find_text=record["claim"] if body_changed else None,
                                       replacement=updated["claim"] if body_changed else None,
                                       metadata_keys={self._record_key, self._operations_key})
-            return self._record_result(result, after, persisted, change, replayed=False)
+            if body_changed and action == "revise":
+                change["body_change"] = (
+                    receipt.for_revise(before, after, changes["replacements"])["body_change"]
+                    if "replacements" in (changes or {}) and transition_changes["claim"] == updated["claim"]
+                    else receipt.changed_claim_passages(record["claim"], updated["claim"])
+                )
+            change["record_changes"] = receipt.record_changes(record, persisted)
+            return self._record_result(result, after, persisted, change, replayed=False, include_history=include_history)
 
     def _transition(self, record: Mapping[str, Any], action: str, timestamp: str, actor: str,
                     reason: str, operation_id: str, changes: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -337,6 +426,8 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         event = {"timestamp": timestamp, "actor": actor, "reason": reason, "event_id": operation_id}
         try:
             if action == "revise":
+                if changes.get("evidence") is not None and not isinstance(changes["evidence"], Mapping):
+                    raise KnowledgeError("changes.evidence must be an object keyed by evidence ID")
                 return self.records.revise(record, **changes, **event)
             if action == "dispute":
                 if changes:
@@ -349,7 +440,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     raise KnowledgeError("retract does not accept changes")
                 return self.records.retract(record, **event)
             if action == "supersede":
-                return self.records.supersede(record, changes.pop("successor"), **event) if set(changes) == {"successor"} else self._invalid_transition()
+                if set(changes) != {"successor"} or not isinstance(changes["successor"], Mapping):
+                    raise KnowledgeError("supersede requires successor_identifier and successor_revision, or a complete successor record")
+                return self.records.supersede(record, changes["successor"], **event)
             if action == "dependency_health":
                 if set(changes) != {"condition_id"}:
                     return self._invalid_transition()
@@ -357,6 +450,21 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if action == "evidence_health":
                 return self._evidence_health(record, timestamp, actor, reason, changes)["record"]
         except (RecordError, KeyError, TypeError) as error:
+            detail = str(error)
+            if isinstance(error, RecordError) and detail.startswith("observation ") and " references unknown evidence: " in detail:
+                raise KnowledgeError("observations reference unknown evidence IDs; preserve referenced IDs or update observations with the evidence mapping") from error
+            if isinstance(error, RecordError) and detail in {
+                "event timestamp must use canonical UTC microseconds",
+                "verification.verified_at must be non-empty text",
+                "verification.verified_at must use canonical UTC microseconds",
+                "verification.verified_at must be newer than the prior semantic verification",
+                "verification.verified_at cannot be later than the event timestamp",
+                "only a supported record can be superseded",
+                "supersession requires a supported successor",
+                "record cannot supersede itself",
+                f"verification.record_revision must be {record['record_revision'] + 1}",
+            }:
+                raise KnowledgeError(detail) from error
             raise KnowledgeError("record transition is invalid") from error
         raise KnowledgeError("record transition action is invalid")
 
@@ -443,17 +551,25 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             record["events"][-1]["snapshot"]["verification"] = copy.deepcopy(record["verification"])
 
     def _record_result(self, mutation: Any, note: Mapping[str, Any], record: Mapping[str, Any],
-                       change: dict[str, Any] | None, *, replayed: bool) -> dict[str, Any]:
+                       change: dict[str, Any] | None, *, replayed: bool, include_history: bool = True) -> dict[str, Any]:
         result: dict[str, Any] = {"mutation": mutation, "record": copy.deepcopy(record),
                                   "identifier": self._identifier(dict(note)),
                                   "committed_revision": record["record_revision"], "replayed": replayed}
+        if not include_history:
+            result["record"].pop("events", None)
+            result["history_included"] = False
         if change is not None:
             change["record_revision"] = record["record_revision"]
-            result.update(knowledge_change=change, knowledge_change_text=receipt.render(change) + "\nCommitted record revision: " + str(record["record_revision"]))
+            result.update(knowledge_change=change, knowledge_change_text=receipt.render(change)
+                          + "\nSaved record state: " + record["status"]
+                          + "\nCommitted record revision: " + str(record["record_revision"]))
         return result
 
     async def read(self, identifier: str, offset: int = 0, limit: int = 12_000, *,
-                   mode: str = "reuse", request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                   mode: Literal["reuse", "inspect"] = "reuse", request_scope: Mapping[str, Any] | None = None,
+                   include_history: bool = True) -> dict[str, Any]:
+        if type(include_history) is not bool:
+            raise ValueError("include_history must be a bool")
         if mode not in {"reuse", "inspect"}:
             raise ValueError("mode must be reuse or inspect")
         if offset < 0 or limit < 1:
@@ -466,7 +582,11 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             value["review_status"] = "unreviewed"
             return value
         if mode == "inspect":
-            return {"identifier": self._identifier(note), "record": record, "mode": "inspect"}
+            result = {"identifier": self._identifier(note), "title": receipt.display_title(note), "record": record, "mode": "inspect"}
+            if not include_history:
+                result["record"] = {key: value for key, value in record.items() if key != "events"}
+                result["history_included"] = False
+            return result
         allowed, reason = await self._reuse_allowed(record, request_scope, self._note_namespace(note))
         if not allowed:
             return {"identifier": self._identifier(note), "withheld": True, "reason": reason,
@@ -477,7 +597,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                          offset: int, limit: int) -> dict[str, Any]:
         content = record["claim"]
         end = min(len(content), offset + limit)
-        return {"identifier": self._identifier(dict(note)), "title": note.get("title", ""),
+        return {"identifier": self._identifier(dict(note)), "title": receipt.display_title(dict(note)),
                 "permalink": note.get("permalink"), "file_path": note.get("file_path"),
                 "content": content[offset:end], "metadata": self._metadata_without_engine(note),
                 "offset": offset, "next_offset": end if end < len(content) else None,
@@ -489,9 +609,9 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
     async def search(self, namespaces: list[str], query: str | None = None,
                      recursive: bool = False, kind: str | None = None,
                      metadata: dict[str, Any] | None = None, cursor: str | None = None,
-                     page_size: int = 10, retrieval_mode: str = "text",
+                     page_size: int = 10, retrieval_mode: Literal["text", "semantic", "hybrid"] = "text",
                      item_types: list[str] | None = None, categories: list[str] | None = None,
-                     *, mode: str = "reuse",
+                     *, mode: Literal["reuse", "inspect"] = "reuse",
                      request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         if mode not in {"reuse", "inspect"}:
             raise ValueError("mode must be reuse or inspect")
@@ -511,7 +631,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 allowed, reason = await self._reuse_allowed(record, request_scope, self._note_namespace(note))
                 if mode == "inspect" or allowed:
                     kept.append({"identifier": identifier, "file_path": row["file_path"],
-                                 "title": row.get("title", ""), "governed": True,
+                                 "title": receipt.display_title(note), "governed": True,
                                  "record_status": record["status"], "record_revision": record["record_revision"],
                                  "snippet": record["claim"][:1000] if allowed and mode == "reuse" else ""})
                 else:
@@ -522,12 +642,13 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 excluded.append({"identifier": identifier, "reason": str(error)})
         result["results"] = kept
         result["excluded"] = excluded
-        result["partial"] = bool(excluded or result["has_more"])
+        result["partial"] = bool(excluded or result["has_more"] or result["index_changed"])
         return result
 
     async def list(self, namespace: str = "/", depth: int = 1, page: int = 1,
-                   page_size: int = 20, glob: str | None = None, sort: str | None = None,
-                   *, mode: str = "reuse",
+                   page_size: int = 20, glob: str | None = None,
+                   sort: Literal["title_asc", "title_desc", "updated_asc", "updated_desc"] | None = None,
+                   *, mode: Literal["reuse", "inspect"] = "reuse",
                    request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         if mode not in {"reuse", "inspect"}:
             raise ValueError("mode must be reuse or inspect")
@@ -559,6 +680,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                     return node
                 allowed, reason = await self._reuse_allowed(record, request_scope, self._note_namespace(note))
                 if mode == "inspect" or allowed:
+                    node["title"] = receipt.display_title(note)
                     return node
                 else:
                     excluded.append({"identifier": identifier, "reason": reason})
@@ -578,7 +700,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
 
     async def context(self, namespace: str | None = None, identifiers: list[str] | None = None,
                       page: int = 1, page_size: int = 5, max_chars: int = 12_000, *,
-                      mode: str = "reuse",
+                      mode: Literal["reuse", "inspect"] = "reuse",
                       request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         if (namespace is None) == (identifiers is None):
             raise ValueError("provide exactly one of namespace or identifiers")
@@ -620,16 +742,19 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
             if public.get("withheld"):
                 omitted.append({"identifier": identifier, "reason": public["reason"]})
                 continue
-            if mode == "inspect":
-                encoded = json.dumps(public["record"], ensure_ascii=False, sort_keys=True)
+            if mode == "inspect" and "record" in public:
+                record = public["record"]
                 available = max_chars - used
-                end = min(len(encoded), available)
-                notes.append({"identifier": identifier, "content": encoded[:end], "offset": 0,
-                              "next_offset": end if end < len(encoded) else None,
-                              "truncated": end < len(encoded), "mode": "inspect",
-                              "content_is_data": True})
-                used += end
-                continue
+                end = min(len(record["claim"]), available)
+                public = {"identifier": public["identifier"], "title": public["title"], "content": record["claim"][:end], "offset": 0,
+                          "next_offset": None,
+                          "truncated": end < len(record["claim"]),
+                          "record_status": record["status"], "record_revision": record["record_revision"],
+                          "scope": copy.deepcopy(record["scope"]), "verification": copy.deepcopy(record["verification"]),
+                          "evidence": copy.deepcopy(record["evidence"]),
+                          "history_included": False, "content_is_data": True}
+            if mode == "inspect":
+                public.update(mode="inspect", reuse_checked=False)
             used += len(public["content"])
             notes.append(public)
         return {"listing": listing, "notes": notes, "omitted": omitted, "errors": errors,
@@ -639,7 +764,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
                 "content_is_data": True}
 
     async def related(self, identifier: str, namespaces: list[str], depth: int = 1,
-                      max_notes: int = 10, max_chars: int = 12_000, *, mode: str = "reuse",
+                      max_notes: int = 10, max_chars: int = 12_000, *, mode: Literal["reuse", "inspect"] = "reuse",
                       request_scope: Mapping[str, Any] | None = None) -> dict[str, Any]:
         """Discover relationships natively while applying engine policy to every read."""
         if not namespaces or not isinstance(namespaces, list):
@@ -651,22 +776,7 @@ class KnowledgeEngine(MaintenanceOperations, NoteOperations):
         scopes = [self._namespace(value) for value in namespaces]
         if not self._in_scopes(self._identifier(seed), scopes, True):
             raise ValueError("the starting note is outside the requested namespaces")
-        native = await self.backend.call("build_context", {
-            "url": seed.get("permalink") or identifier, "depth": depth, "timeframe": None,
-            "page": 1, "page_size": 1, "max_related": 100,
-        })
-        selected, excluded = [self._identifier(seed)], 0
-        for result in native.get("results", []):
-            for item in [result.get("primary_result", {}), *result.get("related_results", [])]:
-                path = item.get("file_path")
-                if not isinstance(path, str) or item.get("type") != "entity":
-                    continue
-                if not self._in_scopes(path, scopes, True):
-                    excluded += 1
-                elif path not in selected:
-                    selected.append(path)
-        limited = (len(selected) > max_notes or bool(native.get("has_more"))
-                   or native.get("metadata", {}).get("related_count", 0) >= 100)
+        selected, excluded, limited = await self._related_paths(seed, identifier, scopes, depth, max_notes)
         bundle = await self.context(identifiers=selected[:max_notes], max_chars=max_chars,
                                     mode=mode, request_scope=request_scope)
         return bundle | {"graph": {"depth": depth, "selected_notes": len(selected[:max_notes]),

@@ -21,6 +21,7 @@ STATUSES = frozenset(
 )
 _CREATION_STATUSES = frozenset({"supported", "disputed", "unverifiable"})
 _TERMINAL_STATUSES = frozenset({"superseded", "retracted"})
+VERIFICATION_OUTCOMES = ("supported", "disputed", "needs_revalidation", "unverifiable")
 _ACTIONS = frozenset({"create", "revise", "dispute", "revalidate", "supersede", "retract", "source_change", "dependency_change"})
 _EVIDENCE_OUTCOMES = frozenset({"unchanged", "changed", "missing", "inaccessible", "removed"})
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -155,7 +156,7 @@ class RecordEngine:
         verified_at = self._utc_datetime(verification.get('verified_at'), 'verification.verified_at')
         self._require_text(verification.get('verifier'), 'verification.verifier')
         outcome = self._require_text(verification.get('outcome'), 'verification.outcome')
-        if outcome not in {'supported', 'disputed', 'needs_revalidation', 'unverifiable'}:
+        if outcome not in VERIFICATION_OUTCOMES:
             self._error('verification.outcome is invalid')
         bound_revision = verification.get('record_revision')
         if not isinstance(bound_revision, int) or isinstance(bound_revision, bool) or (not 1 <= bound_revision <= revision):

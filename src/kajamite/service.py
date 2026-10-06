@@ -7,7 +7,7 @@ import binascii
 import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from .errors import BackendError, MutationUncertain
 from . import receipt
@@ -15,6 +15,37 @@ from . import receipt
 
 class KnowledgeError(RuntimeError):
     """The requested knowledge operation could not be completed safely."""
+
+
+def apply_exact_replacements(body: str, replacements: list[dict[str, str]]) -> str:
+    """Replace disjoint exact passages selected from one original body."""
+    if not isinstance(replacements, list) or not 1 <= len(replacements) <= 100:
+        raise ValueError("replacements must contain between 1 and 100 entries")
+    selections = []
+    for index, item in enumerate(replacements):
+        if not isinstance(item, dict) or set(item) != {"find_text", "replacement"}:
+            raise ValueError("each replacement must contain only find_text and replacement")
+        if not isinstance(item["find_text"], str) or not item["find_text"]:
+            raise ValueError("replacement find_text must be nonempty text")
+        if not isinstance(item["replacement"], str):
+            raise ValueError("replacement value must be text")
+        start = body.find(item["find_text"])
+        if start < 0:
+            raise KnowledgeError("replacement find_text is missing from the current note body")
+        if body.find(item["find_text"], start + 1) != -1:
+            raise KnowledgeError("replacement find_text must occur exactly once in the current note body")
+        selections.append((start, start + len(item["find_text"]), index, item))
+    selections.sort()
+    for previous, current in zip(selections, selections[1:]):
+        if current[0] < previous[1]:
+            raise KnowledgeError("replacement selections overlap in the current note body")
+    parts: list[str] = []
+    position = 0
+    for start, end, _, item in selections:
+        parts.extend((body[position:start], item["replacement"]))
+        position = end
+    parts.append(body[position:])
+    return "".join(parts)
 
 
 class NoteOperations:
@@ -34,7 +65,7 @@ class NoteOperations:
         metadata: dict[str, Any] | None = None,
         cursor: str | None = None,
         page_size: int = 10,
-        retrieval_mode: str = "text",
+        retrieval_mode: Literal["text", "semantic", "hybrid"] = "text",
         item_types: list[str] | None = None,
         categories: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -54,7 +85,7 @@ class NoteOperations:
         fingerprint = hashlib.sha256(
             json.dumps(criteria, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        offset = self._decode_cursor(cursor, fingerprint) if cursor else 0
+        offset, native_total, index_changed = self._decode_cursor(cursor, fingerprint) if cursor else (0, None, False)
         native_page, skip = divmod(offset, self._native_page_size)
         native_page += 1
         results: list[dict[str, Any]] = []
@@ -80,6 +111,10 @@ class NoteOperations:
             rows = payload.get("results")
             if not isinstance(rows, list):
                 raise KnowledgeError("search_notes returned invalid results")
+            total = payload.get("total")
+            if type(total) is int and total >= 0:
+                index_changed = index_changed or (native_total is not None and total != native_total)
+                native_total = total
             pages += 1
             stopped = False
             for index, row in enumerate(rows):
@@ -113,11 +148,12 @@ class NoteOperations:
         scan_limited = pages == self._native_page_budget and not exhausted
         return {
             "results": results,
-            "next_cursor": None if exhausted else self._encode_cursor(offset, fingerprint),
+            "next_cursor": None if exhausted else self._encode_cursor(offset, fingerprint, native_total, index_changed),
             "has_more": not exhausted,
             "exhausted": exhausted,
             "retrieval_mode": retrieval_mode,
-            "complete_scope_search": exhausted and retrieval_mode == "text",
+            "complete_scope_search": exhausted and retrieval_mode == "text" and not index_changed,
+            "index_changed": index_changed,
             "scanned_results": scanned,
             "scan_limited": scan_limited,
         }
@@ -178,7 +214,8 @@ class NoteOperations:
             "candidates": candidates, "omissions": omissions, "errors": errors,
             "next_cursor": None if exhausted else self._encode_collection_cursor(scan["next_cursor"], fingerprint),
             "has_more": not exhausted, "exhausted": exhausted,
-            "scanned_notes": len(scan["results"]), "partial": bool(not exhausted or omissions or errors),
+            "scanned_notes": len(scan["results"]), "partial": bool(not exhausted or omissions or errors or scan.get("index_changed")),
+            "index_changed": bool(scan.get("index_changed")),
             "live": True,
         }
 
@@ -282,42 +319,15 @@ class NoteOperations:
         """Apply connected exact replacements against one current note body."""
         if not isinstance(expected_content_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_content_sha256):
             raise ValueError("expected_content_sha256 must be a lowercase SHA-256 digest")
-        if not isinstance(replacements, list) or not 1 <= len(replacements) <= 100:
-            raise ValueError("replacements must contain between 1 and 100 entries")
         if not isinstance(preview, bool):
             raise ValueError("preview must be a boolean")
-        for item in replacements:
-            if not isinstance(item, dict) or set(item) != {"find_text", "replacement"}:
-                raise ValueError("each replacement must contain only find_text and replacement")
-            if not isinstance(item["find_text"], str) or not item["find_text"]:
-                raise ValueError("replacement find_text must be nonempty text")
-            if not isinstance(item["replacement"], str):
-                raise ValueError("replacement value must be text")
         async with self.backend.mutation():
             before = await self._read_full(identifier)
             await self._check_generic_note(before)
             body = before["content"]
             if self._content_sha256(body) != expected_content_sha256:
                 raise KnowledgeError("content revision conflict; read the current complete note before retrying")
-            selections = []
-            for index, item in enumerate(replacements):
-                start = body.find(item["find_text"])
-                if start < 0:
-                    raise KnowledgeError("replacement find_text is missing from the current note body")
-                if body.find(item["find_text"], start + 1) != -1:
-                    raise KnowledgeError("replacement find_text must occur exactly once in the current note body")
-                selections.append((start, start + len(item["find_text"]), index, item))
-            selections.sort()
-            for previous, current in zip(selections, selections[1:]):
-                if current[0] < previous[1]:
-                    raise KnowledgeError("replacement selections overlap in the current note body")
-            parts: list[str] = []
-            position = 0
-            for start, end, _, item in selections:
-                parts.extend((body[position:start], item["replacement"]))
-                position = end
-            parts.append(body[position:])
-            expected = "".join(parts)
+            expected = apply_exact_replacements(body, replacements)
             if preview:
                 return {
                     "preview": True, "identifier": self._identifier(before),
@@ -345,10 +355,12 @@ class NoteOperations:
         page: int = 1,
         page_size: int = 20,
         glob: str | None = None,
-        sort: str | None = None,
+        sort: Literal["title_asc", "title_desc", "updated_asc", "updated_desc"] | None = None,
     ) -> dict[str, Any]:
         if depth < 1 or depth > 10 or page < 1 or page_size < 1 or page_size > 200:
             raise ValueError("depth must be 1..10, page >= 1, and page_size 1..200")
+        if sort is not None and sort not in {"title_asc", "title_desc", "updated_asc", "updated_desc"}:
+            raise ValueError("sort must be title_asc, title_desc, updated_asc, updated_desc, or omitted")
         payload = await self.backend.call(
             "list_directory",
             {"dir_name": self._namespace(namespace), "depth": depth,
@@ -439,27 +451,39 @@ class NoteOperations:
         seed = await self._read_full(identifier)
         if not self._in_scopes(self._identifier(seed), scopes, True):
             raise ValueError("the starting note is outside the requested namespaces")
-        native = await self.backend.call("build_context", {
-            "url": seed.get("permalink") or identifier, "depth": depth,
-            "timeframe": None, "page": 1, "page_size": 1, "max_related": 100,
-        })
-        selected = [self._identifier(seed)]
-        excluded = 0
-        for result in native.get("results", []):
-            for item in [result.get("primary_result", {}), *result.get("related_results", [])]:
-                path = item.get("file_path")
-                if not isinstance(path, str) or item.get("type") != "entity":
-                    continue
-                if not self._in_scopes(path, scopes, True):
-                    excluded += 1
-                elif path not in selected:
-                    selected.append(path)
-        limited = len(selected) > max_notes or bool(native.get("has_more")) or native.get("metadata", {}).get("related_count", 0) >= 100
+        selected, excluded, limited = await self._related_paths(seed, identifier, scopes, depth, max_notes)
         bundle = await self.context(identifiers=selected[:max_notes], max_chars=max_chars)
         return bundle | {"graph": {"depth": depth, "selected_notes": len(selected[:max_notes]),
                                    "excluded_outside_scope": excluded, "limited": limited,
                                    "source": "basic_memory_relations"},
                          "partial": bool(bundle["partial"] or limited or excluded)}
+
+    async def _related_paths(self, seed, identifier, scopes, depth, max_notes):
+        """Follow bounded primary pagination without hiding related-result limits."""
+        selected, excluded, limited = [self._identifier(seed)], set(), False
+        for page in range(1, 6):
+            native = await self.backend.call("build_context", {
+                "url": seed.get("permalink") or identifier, "depth": depth,
+                "timeframe": None, "page": page, "page_size": 1, "max_related": 100,
+            })
+            limited |= native.get("metadata", {}).get("related_count", 0) >= 100
+            for result in native.get("results", []):
+                for item in [result.get("primary_result", {}), *result.get("related_results", [])]:
+                    path = item.get("file_path")
+                    if not isinstance(path, str) or item.get("type") != "entity":
+                        continue
+                    if not self._in_scopes(path, scopes, True):
+                        excluded.add(path)
+                    elif path not in selected:
+                        selected.append(path)
+            if len(selected) > max_notes:
+                limited = True
+                break
+            if not native.get("has_more"):
+                break
+        else:
+            limited = True
+        return selected, len(excluded), limited
 
     async def move(
         self, identifier: str, destination: str, is_namespace: bool = False
@@ -612,6 +636,9 @@ class NoteOperations:
         requested = requested.strip().replace("\\", "/").lstrip("/")
         candidates = {str(value).replace("\\", "/").lstrip("/")
                       for value in (note.get("file_path"), note.get("permalink")) if value}
+        path = str(note.get("file_path", "")).replace("\\", "/").lstrip("/")
+        if "/" in path and path.endswith(".md"):
+            candidates.add(path.removesuffix(".md"))
         if requested.startswith("memory://"):
             return requested.removeprefix("memory://").lstrip("/") in candidates
         return requested in candidates
@@ -680,19 +707,24 @@ class NoteOperations:
         return False
 
     @staticmethod
-    def _encode_cursor(offset: int, fingerprint: str) -> str:
-        raw = json.dumps({"offset": offset, "fingerprint": fingerprint}, separators=(",", ":"))
+    def _encode_cursor(offset: int, fingerprint: str, native_total: int | None = None, index_changed: bool = False) -> str:
+        raw = json.dumps({"offset": offset, "fingerprint": fingerprint,
+                          "native_total": native_total, "index_changed": index_changed}, separators=(",", ":"))
         return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
     @staticmethod
-    def _decode_cursor(cursor: str, fingerprint: str) -> int:
+    def _decode_cursor(cursor: str, fingerprint: str) -> tuple[int, int | None, bool]:
         try:
             raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
             value = json.loads(raw)
             offset = value["offset"]
             if value["fingerprint"] != fingerprint or not isinstance(offset, int) or offset < 0:
                 raise ValueError
-            return offset
+            total = value.get("native_total")
+            changed = value.get("index_changed", False)
+            if total is not None and (type(total) is not int or total < 0) or type(changed) is not bool:
+                raise ValueError
+            return offset, total, changed
         except (binascii.Error, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             raise ValueError("cursor is invalid or belongs to another search") from error
 

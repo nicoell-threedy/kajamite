@@ -191,12 +191,38 @@ A status field alone does not establish verified support.
 
 Use knowledge_record_create for a claim with explicit evidence, scope, and verification.
 Use knowledge_record_transition with the current expected revision and a unique operation ID.
+For creation or transitions, use include_history=false when only current fields and the change receipt are needed. This omits response snapshots, not stored history. Inspect the returned identifier for full history; check its revision against committed_revision because later writes can advance it.
+For a focused governed revision, use action="revise" and changes.replacements with
+objects containing find_text and replacement. Do not also supply changes.claim.
+Revision fields are claim, replacements, scope, observations, evidence,
+verification, depends_on, and mirror_observations. Lifecycle actions own direct status changes.
+For declared whole-claim mirrors, select existing IDs in changes.mirror_observations
+with claim or replacements. Each selected statement must equal the current whole
+claim. Do not also supply observations. The revision updates selected statements
+atomically while preserving unselected statements and every evidence binding.
+Supplied verification needs record_revision, verified_at, verifier, outcome,
+and evidence_ids. Missing fields are reported together before backend access.
+Selections apply to the original body and must be unique and disjoint. Unselected
+text remains unchanged. Fresh verification is required for supported status.
+Bind verification.record_revision to expected_revision + 1. Use six fractional
+digits and `Z` for event and verification times, such as
+`2026-01-01T12:00:00.000001Z`. Verification must be newer than the previous
+verification and no later than the event. Correct a reported field error before
+retrying; removing verification makes a changed claim need revalidation.
 If a transition result is uncertain, inspect current state before a retry.
+For action="supersede", pass changes.successor_identifier and changes.successor_revision
+from an inspected stored successor. The engine resolves it under the mutation lock;
+do not repeat its full record payload. Both records must have the same namespace
+and scope, and the successor must remain supported at the expected revision.
+Do not change scope merely to pass this check. A scope correction needs independent
+evidence and fresh verification before a record can remain supported.
 Generic note edits and moves cannot bypass the record lifecycle.
 
 For ordinary governed reuse, supply request_scope and respect returned withholding reasons.
 If source checks are unavailable, do not describe a supported record as currently reusable.
-Use mode="inspect" to review authorized history or disputed knowledge.
+Use mode="inspect", include_history=false for a current working inspection.
+Use the default include_history=true for a full history audit.
+Context and related bundles in inspect mode budget prose, keep current metadata separate, and omit history. They do not establish current reuse eligibility. For a truncated governed inspection preview, read the complete current record with mode="inspect", include_history=false.
 Use knowledge_record_maintain to record affected dependency changes.
 Use knowledge_record_remove only for explicitly authorized physical removal.
 Its result covers storage and bounded active-index evidence, not backups or external copies.

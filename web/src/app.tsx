@@ -17,9 +17,11 @@ import { Separator } from "@/components/ui/separator";
 import { createBridge } from "./bridge";
 import {
   describe,
+  creationClaim,
   noteName,
   excerpt,
   changeExcerpts,
+  changeCounts,
   type Entry,
 } from "./model";
 const theme = JSON.parse(
@@ -27,9 +29,31 @@ const theme = JSON.parse(
 );
 const bridge = createBridge(theme);
 
-// Highlight a single changed span, preserving all unchanged context. Multiple
-// edits inside the span remain verbatim; this is not a generated paraphrase.
-function changedSpan(value: string, other: string) {
+// Legacy receipts retain broad-span highlighting. New ranges address code points.
+function changedSpan(
+  value: string,
+  other: string,
+  ranges?: [number, number][],
+) {
+  if (ranges) {
+    const points = Array.from(value);
+    let offset = 0;
+    const parts = ranges.flatMap(([start, end]) => {
+      const unchanged = points.slice(offset, start).join("");
+      offset = end;
+      return [
+        unchanged,
+        <mark key={start}>{points.slice(start, end).join("")}</mark>,
+      ];
+    });
+    return (
+      <>
+        {parts}
+        {points.slice(offset).join("")}
+      </>
+    );
+  }
+  if (value === other) return value;
   let start = 0,
     end = 0;
   while (
@@ -57,11 +81,15 @@ function Comparison({ item }: { item: Entry }) {
   const before = item.before ?? "None",
     after = item.after ?? "None";
   const long =
-    Math.max(before.length, after.length, item.message?.length ?? 0) > 600;
+    (item.message !== undefined
+      ? item.message.length
+      : Math.max(before.length, after.length)) > 600;
+  const oldPoints = Array.from(before),
+    newPoints = Array.from(after);
   let common = 0;
   while (
-    common < Math.min(before.length, after.length) &&
-    before[common] === after[common]
+    common < Math.min(oldPoints.length, newPoints.length) &&
+    oldPoints[common] === newPoints[common]
   )
     common++;
   const offset =
@@ -70,8 +98,43 @@ function Comparison({ item }: { item: Entry }) {
     full || !long
       ? s
       : (offset ? "…" : "") +
-        s.slice(offset, offset + 600) +
-        (s.length > offset + 600 ? "…" : "");
+        Array.from(s)
+          .slice(offset, offset + 600)
+          .join("") +
+        (Array.from(s).length > offset + 600 ? "…" : "");
+  const visibleRanges = (
+    value: string,
+    ranges: unknown,
+  ): [number, number][] | undefined => {
+    const length = Array.from(value).length;
+    let previous = 0;
+    if (
+      !Array.isArray(ranges) ||
+      ranges.length > 1000 ||
+      !ranges.every((range) => {
+        if (!Array.isArray(range) || range.length !== 2) return false;
+        const [start, end] = range;
+        const valid =
+          Number.isInteger(start) &&
+          Number.isInteger(end) &&
+          start >= previous &&
+          end > start &&
+          end <= length;
+        previous = end;
+        return valid;
+      })
+    )
+      return undefined;
+    const start = full || !long ? 0 : offset;
+    const end = full || !long ? length : offset + 600;
+    const prefix = start ? 1 : 0;
+    return ranges
+      .filter(([a, b]) => b > start && a < end)
+      .map(([a, b]) => [
+        Math.max(a, start) - start + prefix,
+        Math.min(b, end) - start + prefix,
+      ]);
+  };
   return (
     <div className="flex flex-col gap-2">
       {item.message !== undefined ? (
@@ -92,17 +155,33 @@ function Comparison({ item }: { item: Entry }) {
         <div className="diff">
           <div className="diff-line">
             <span className="diff-label">Before</span>
-            <p>{changedSpan(shown(before), shown(after))}</p>
+            <p>
+              {changedSpan(
+                shown(before),
+                shown(after),
+                visibleRanges(before, item.beforeRanges),
+              )}
+            </p>
           </div>
           <div className="diff-line diff-after">
             <span className="diff-label">After</span>
-            <p>{changedSpan(shown(after), shown(before))}</p>
+            <p>
+              {changedSpan(
+                shown(after),
+                shown(before),
+                visibleRanges(after, item.afterRanges),
+              )}
+            </p>
           </div>
         </div>
       )}
       {long && (
         <Button size="sm" variant="ghost" onClick={() => setFull(!full)}>
-          {full ? "Shorten excerpt" : "Show full excerpt"}
+          {full
+            ? "Show less"
+            : item.complete
+              ? "Show full note"
+              : "Show full excerpt"}
         </Button>
       )}
       {item.truncated && (
@@ -114,12 +193,16 @@ function Comparison({ item }: { item: Entry }) {
   );
 }
 function SummaryEntry({ item, showNote }: { item: Entry; showNote: boolean }) {
-  const [before, after] = changeExcerpts(item.before, item.after);
+  const [before, after] = changeExcerpts(
+    item.before,
+    item.after,
+    item.kind === "text" ? 300 : 110,
+  );
   return (
     <li className="summary-line">
       {showNote && item.note && (
         <span className="font-medium">
-          {noteName(item.note)}
+          {item.noteTitle || noteName(item.note)}
           <span className="text-muted-foreground"> · </span>
         </span>
       )}
@@ -127,7 +210,7 @@ function SummaryEntry({ item, showNote }: { item: Entry; showNote: boolean }) {
       {item.message !== undefined ? (
         excerpt(item.message)
       ) : item.title === "Added content" || item.title === "Removed content" ? (
-        excerpt(item.title === "Added content" ? item.after : item.before)
+        excerpt(item.title === "Added content" ? item.after : item.before, 300)
       ) : (
         <>
           <span>{before}</span>
@@ -181,6 +264,30 @@ function Evidence({
 function App() {
   const state = useSyncExternalStore(bridge.subscribe, bridge.snapshot);
   const view = describe(state.result, state.error);
+  const [snapshot, setSnapshot] = useState<{
+    generation: number;
+    claim: string;
+  } | null>(null);
+  useEffect(() => {
+    let current = true;
+    if (!state.error)
+      creationClaim(state.result).then((claim) => {
+        if (current)
+          setSnapshot(
+            claim === null ? null : { generation: state.generation, claim },
+          );
+      });
+    return () => {
+      current = false;
+    };
+  }, [state.result, state.generation, state.error]);
+  if (!state.error && snapshot?.generation === state.generation) {
+    view.entries = view.entries.map((item) =>
+      item.title === "Added content"
+        ? { ...item, after: snapshot.claim, truncated: false, complete: true }
+        : item,
+    );
+  }
   const waiting = state.stage === "waiting",
     working = state.stage === "working",
     cancelled = state.stage === "cancelled",
@@ -193,10 +300,20 @@ function App() {
         ? "Operation cancelled"
         : view.headline;
   const batch = Array.isArray(state.result?.completed);
-  const overview = view.entries
+  const created =
+    !state.error &&
+    state.result?.knowledge_change?.body_change?.kind === "created";
+  const fields = created
+    ? view.entries.filter((item) => item.kind === "field")
+    : [];
+  const primary = view.entries.filter((item) => !fields.includes(item));
+  const overview = primary
     .filter((item) => item.kind !== "message")
     .slice(0, batch ? 3 : 2);
   const errors = view.entries.filter((item) => item.kind === "message");
+  const remaining = primary.filter(
+    (item) => item.kind !== "message" && !overview.includes(item),
+  );
   useEffect(() => {
     const observer = new ResizeObserver(bridge.resize);
     observer.observe(document.body);
@@ -220,7 +337,7 @@ function App() {
           {view.subject && !active && (
             <CardDescription id="subject" className="break-anywhere">
               <strong className="text-card-foreground">
-                {noteName(view.subject)}
+                {view.subjectTitle || noteName(view.subject)}
               </strong>
               <span className="note-path">{view.subject}</span>
             </CardDescription>
@@ -245,10 +362,9 @@ function App() {
                         ))}
                       </ul>
                     )}
-                    {view.entries.length > overview.length && !state.error && (
+                    {remaining.length > 0 && !state.error && (
                       <p className="text-xs text-muted-foreground">
-                        {view.entries.length - overview.length} more{" "}
-                        {batch ? "items" : "changes"} in details
+                        {changeCounts(remaining)} in details
                       </p>
                     )}
                   </>
@@ -287,16 +403,19 @@ function App() {
             </div>
             <CollapsibleContent id="review">
               <div id="changes" className="flex flex-col gap-3">
-                {view.entries.slice(0, state.visible).map((item, index) => (
+                {primary.slice(0, state.visible).map((item, index) => (
                   <section
                     key={`${state.generation}-${index}`}
                     className="flex flex-col gap-2"
                   >
                     <Separator />
-                    {batch && item.note !== view.entries[index - 1]?.note && (
-                      <h2 className="break-anywhere font-medium">
-                        {item.note}
-                      </h2>
+                    {batch && item.note !== primary[index - 1]?.note && (
+                      <div>
+                        <h2 className="break-anywhere font-medium">
+                          {item.noteTitle || noteName(item.note ?? "")}
+                        </h2>
+                        <p className="note-path break-anywhere">{item.note}</p>
+                      </div>
                     )}
                     <h3 className="text-xs font-medium text-muted-foreground">
                       {item.title}
@@ -310,12 +429,34 @@ function App() {
                   id="more"
                   variant="secondary"
                   size="sm"
-                  hidden={state.visible >= view.entries.length}
+                  hidden={state.visible >= primary.length}
                   onClick={bridge.showMore}
                 >
-                  Show more ({Math.max(0, view.entries.length - state.visible)}{" "}
+                  Show more ({Math.max(0, primary.length - state.visible)}{" "}
                   remaining)
                 </Button>
+                {fields.length > 0 && (
+                  <Collapsible key={`fields-${state.generation}`}>
+                    <CollapsibleTrigger asChild>
+                      <Button id="fields-toggle" variant="secondary" size="sm">
+                        Initial note fields ({fields.length})
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent
+                      id="note-fields"
+                      className="flex flex-col gap-3 pt-3"
+                    >
+                      {fields.map((item, index) => (
+                        <section key={index} className="flex flex-col gap-2">
+                          <h3 className="text-xs font-medium text-muted-foreground">
+                            {item.title}
+                          </h3>
+                          <Comparison item={item} />
+                        </section>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
                 <Evidence
                   key={state.generation}
                   result={state.result}

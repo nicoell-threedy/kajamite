@@ -14,6 +14,7 @@ import tempfile
 import time
 
 from mcp import ClientSession, StdioServerParameters
+import kajamite
 from mcp.client.stdio import stdio_client
 
 from kajamite.backend import connect, unpack
@@ -22,12 +23,16 @@ from kajamite.engine import KnowledgeEngine
 
 
 async def call(config, name, arguments):
-    params = StdioServerParameters(command=sys.executable, args=["-m", "kajamite", "--config", str(config), "serve"])
+    params = StdioServerParameters(command=sys.executable, args=["-m", "kajamite", "--config", str(config), "serve"],
+                                  env={"PYTHONPATH": str(Path(kajamite.__file__).resolve().parents[1])})
     with open(os.devnull, "w") as err:
         async with stdio_client(params, errlog=err) as (read, write):
             async with ClientSession(read, write, read_timeout_seconds=90) as session:
                 await session.initialize()
-                return unpack(await session.call_tool(name, arguments))
+                result = await session.call_tool(name, arguments)
+                if result.model_dump(mode="json", by_alias=True).get("isError"):
+                    raise AssertionError(f"{name} failed: {result.content!r}")
+                return unpack(result)
 
 
 async def wait_for_indexed_path(backend, query, identifier, attempts=120):
@@ -151,11 +156,23 @@ async def run(config, wiki):
         # Keep the ranking corpus in one backend session. Restarting the backend
         # can trigger asynchronous resync between offset-based cursor pages.
         # Cross-session operations are already exercised above and in engine acceptance.
+        native_pages = []
+        native_call = backend.call
+
+        async def traced_call(name, arguments):
+            result = await native_call(name, arguments)
+            if name == "search_notes":
+                native_pages.append({"page": arguments["page"], "has_more": result.get("has_more"),
+                                     "total": result.get("total"),
+                                     "paths": [row.get("file_path") for row in result.get("results", [])]})
+            return result
+
+        backend.call = traced_call
         service = KnowledgeEngine(backend)
         first = await service.search(namespaces=["Late"], query="quasar")
-        assert not first["results"] and first["has_more"] and first["scan_limited"], first
+        assert not first["results"] and first["has_more"] and first["scan_limited"], {"result": first, "native_pages": native_pages}
         later = await service.search(namespaces=["Late"], query="quasar", cursor=first["next_cursor"])
-        assert [row["identifier"] for row in later["results"]] == ["Late/Target.md"], later
+        assert [row["identifier"] for row in later["results"]] == ["Late/Target.md"], {"result": later, "native_pages": native_pages}
         assert later["exhausted"], later
     return {"status": "passed", "checks": ["multi-note namespaces", "same-title separation", "deterministic mutation receipts", "plain-text receipt fallback", "metadata-only edits", "concurrent writers", "collision refusal", "note and namespace moves", "search by moved path", "bounded shared context", "bounded collection inspection", "plain Markdown", "native FTS continuation beyond 250 outside hits"]}
 

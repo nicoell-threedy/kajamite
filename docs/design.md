@@ -28,7 +28,8 @@ siblings. Search scope uses file paths, not permalinks, because native moves may
 preserve permalink identity. Return actual identifiers/paths for follow-up calls.
 Namespace matching preserves canonical path case; use paths returned by listing
 or mutation rather than guessing case or slugs. Bare ambiguous titles are not
-accepted as note addresses.
+accepted as note addresses. A directory-qualified wiki target may omit `.md` only
+when the returned physical path matches that exact qualified stem.
 
 ## Search implementation
 
@@ -59,6 +60,13 @@ A future native path-filtered search before ranking/pagination can replace the
 fallback without changing namespace meaning. The cost today is extra backend
 pages for sparse scopes. Pagination is live and does not guarantee a stable
 snapshot during concurrent changes.
+
+When reported native totals change within a scan or its cursor continuation,
+`index_changed=true` withholds `complete_scope_search` and marks engine search
+and collection inspection partial. Exhaustion still describes the end of the
+native stream; it does not establish absence from a changing index. Equal or
+missing totals cannot prove stability. Legacy cursors have no earlier total to
+compare. The signal does not trigger retries or expand the scan budget.
 
 ## Context and mutations
 
@@ -130,6 +138,12 @@ external network access or executable actions. Hosts without MCP Apps support
 still receive the complete structured result and labeled text fallback. The UI
 is presentation, not authority, and is not required for a successful operation.
 
+An error producer can set `error.mutation_outcome="not_started"` only when it
+knows the operation failed before a write attempt. The UI then directs the caller
+to correct the input. It retains the uncertainty warning when that marker is
+absent, unknown, or contradicted by completed-state evidence. Exception type alone
+does not establish whether a write started.
+
 ## Agent behavior and observability
 
 The reusable skill teaches discovery, selective context retrieval, checkpoint
@@ -144,7 +158,13 @@ not answer quality. Test outcomes are recorded in validation.md.
 ## Research and compatibility
 
 Reviewed against installed Basic Memory 0.23.0 and MCP SDK 2.1.1 on 2026-09-09.
-list_directory supplies nodes, depth, sorting and pagination; write_note accepts
+list_directory supplies nodes, depth, sorting and pagination. Listing accepts
+`title_asc`, `title_desc`, `updated_asc`, and `updated_desc`; omit sorting for the
+backend default. Unsupported values are rejected before backend access.
+Read-only MCP backend failures report a read failure without implying a pending
+knowledge write. Explicit mutation uncertainty remains visible, including when
+raised during a read. Unexpected backend details are not exposed.
+write_note accepts
 a directory; edit_note merges metadata; move_note handles directories and notes.
 Native results can be wrapped in structuredContent.result or returned as JSON
 text. Search total may be inexact, so continuation uses has_more.
