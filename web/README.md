@@ -42,10 +42,11 @@ references with `npx shadcn@latest docs button card collapsible separator`.
 Review CLI changes before adding dependencies, and pin accepted versions.
 Prefer semantic tokens, built-in variants, composition, and layout-only overrides.
 
-The overview keeps one action and distinct note/change counts. Details show
-three changes at a time. Preview and error actions describe their actual result.
-Technical evidence stays behind a separate disclosure. No chat input, nested
-scrolling, tabs, or navigation hierarchy is added to the inline card.
+The card and expanded detail share a source-faithful comparison surface. Large
+regions reveal locally through one seam, with a gutter fold control after
+expansion. Inline comparison scrolls within a bounded region; expanded detail
+uses the page scroll and offers unified/split layouts. Raw evidence remains
+behind an optional disclosure. Host display refusal retains local expansion.
 
 ## Adopter themes
 

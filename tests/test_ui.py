@@ -3,6 +3,7 @@ import html as html_module
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -61,7 +62,7 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;c
   await show(await wire(snapshot));
   assert(el('headline').textContent==='Operation completed','missing details do not erase completion');
   assert(el('status').textContent.includes('Complete diff unavailable'),'missing or mismatched diff is explicit');
-  assert(el('toggle').textContent==='View summary','summary action is honest');
+  assert(el('toggle').textContent.includes('View summary'),'summary action is honest');
   el('toggle').click();await wait();assert(!el('changes').querySelector('.diff'),'mismatched snapshot never becomes a diff');
  }
  await show({structuredContent:{...SUMMARY,audit:{available:false}}});
@@ -138,7 +139,7 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
 (async () => {
  await initialization; await result({knowledge_change:CHANGE});
  assert(el('review').hidden && !el('evidence'), 'details start hidden');
- assert(doc().body.getBoundingClientRect().height < 240, 'compact initial height');
+ assert(doc().querySelector('.comparison-frame').getBoundingClientRect().height <= 322, 'compact initial height');
  assert(el('overview').textContent.includes('old passage 0') && el('overview').textContent.includes('new passage 0'), 'real edits visible without interaction');
  assert(el('counts').textContent === '1 note · 9 text edits', 'notes and passages are distinct');
  for (const state of ['disputed','needs_revalidation','unverifiable','superseded','retracted']) {
@@ -158,8 +159,8 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  const changeRequest=requests.length;
  el('toggle').click(); await wait();
  assert(requests[changeRequest] === 'fullscreen' && !el('review').hidden, 'advertised fullscreen');
- assert(el('changes').children.length === 3, 'bounded first disclosure');
- el('more').click(); await wait(); assert(el('changes').children.length === 6, 'show more');
+ assert(el('changes').children.length === 9, 'all supplied edits remain in the comparison surface');
+ assert(!el('more'), 'all supplied edits use one comparison scroll surface');
  reply({method:'ui/notifications/host-context-changed',params:{displayMode:'inline'}}); await wait();
  assert(el('review').hidden, 'host close restores summary');
  for (const mode of ['reject','inline','timeout']) {
@@ -175,19 +176,23 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  await result({knowledge_change:UNCHANGED});
  assert(el('headline').textContent === 'No content changes' && el('counts').textContent.includes('0 changes'), 'no-op');
  await result({knowledge_change:CREATED});
- assert(el('overview').textContent.includes('New reader-facing explanation.') && !el('overview').textContent.includes('generated-id'), 'creation summary leads with prose');
+ assert(el('overview').textContent.includes('New reader-facing explanation.') && el('overview').textContent.indexOf('New reader-facing explanation.') < el('overview').textContent.indexOf('generated-id'), 'creation summary leads with prose');
  assert(el('counts').textContent==='1 note' && !el('overview').textContent.includes('field update'), 'creation does not describe initialization as edits');
  el('toggle').click(); await wait();
- assert(el('changes').children.length === 1 && el('note-fields').hidden && el('more').hidden, 'creation fields are secondary');
- assert(el('fields-toggle').textContent.includes('Initial note fields'), 'creation field disclosure identifies initialization');
- el('fields-toggle').click(); await wait();
- assert(el('note-fields').textContent.includes('generated-id') && el('note-fields').textContent.includes('notes/new-note'), 'all initialized fields remain inspectable');
+ assert(el('changes').textContent.includes('generated-id') && !el('more'), 'creation fields are secondary');
+ assert(el('changes').querySelector('.entry-label'), 'creation fields retain named labels');
+
+ assert(el('changes').textContent.includes('generated-id') && el('changes').textContent.includes('notes/new-note'), 'all initialized fields remain inspectable');
  await result({knowledge_change:CREATED}); el('toggle').click(); await wait();
- assert(el('note-fields').hidden, 'new result resets field disclosure');
+ assert(!doc().querySelector('.is-open'), 'new result resets local disclosure');
  await result(VERIFIED); el('toggle').click(); await wait();
- const fullNote = [...el('changes').querySelectorAll('button')].find(button => button.textContent === 'Show full note');
- assert(fullNote && !el('changes').textContent.includes('not the full note'), 'verified claim offers complete note');
- fullNote.click(); await wait();
+ el('reading-tab').click();await wait();
+ assert(el('reading').textContent.includes('Final supported step: café 💡.') && el('changes').hidden, 'reading complete verified claim');
+ el('edits-tab').click();await wait();
+ assert(!el('changes').hidden, 'comparison returns without losing content');
+ const fullNote = el('changes').querySelector('.diff-text');
+ assert(fullNote && !el('changes').textContent.includes('Further text was not supplied'), 'verified claim offers complete note');
+
  assert(el('changes').textContent.includes('Final supported step: café 💡.'), 'complete Unicode claim is readable beyond receipt limit');
  for (const invalid of ['hash', 'revision', 'readback', 'legacy']) {
   const value = structuredClone(VERIFIED);
@@ -196,7 +201,7 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
   if (invalid === 'readback') value.knowledge_change.readback_verified = false;
   if (invalid === 'legacy') delete value.knowledge_change.record_claim_sha256;
   await result(value); el('toggle').click(); await wait();
-  assert(!el('changes').textContent.includes('Show full note') && el('changes').textContent.includes('not the full note'), 'unbound claim retains excerpt disclosure: '+invalid);
+  assert(el('changes').textContent.includes('Further text was not supplied') && !el('changes').textContent.includes('Final supported step'), 'unbound claim retains excerpt disclosure: '+invalid);
  }
  for (const clipped of [CLIPPED, CLIPPED_GROUP]) {
   await result({knowledge_change:clipped});
@@ -230,12 +235,12 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
  assert(el('status').textContent.includes('may have committed') && !el('status').textContent.includes('Saved record state'), 'failure takes precedence over record state');
  await result({}); assert(el('headline').textContent === 'No change receipt returned', 'missing receipt');
  await result({knowledge_change:REFLOW}); el('toggle').click(); await wait();
- assert(el('subject').querySelector('strong').textContent === 'Resource retry policy', 'stored readable title');
- const marks = [...doc().querySelectorAll('.diff mark')].map(node=>node.textContent).join('');
+ assert(el('subject').querySelector('h2').textContent === 'Resource retry policy', 'stored readable title');
+ const marks = [...doc().querySelectorAll('.diff del, .diff ins')].map(node=>node.textContent).join('');
  assert(marks.includes('10') && marks.includes('20'), 'changed values highlighted');
  assert(!marks.includes('shared resource') && !marks.includes('café'), 'reflow retains unhighlighted phrases');
- assert(doc().querySelector('.diff-line p').textContent === REFLOW.body_change.before.preview, 'Unicode before text preserved');
- assert(doc().querySelector('.diff-after p').textContent === REFLOW.body_change.after.preview, 'Unicode after text preserved');
+ assert([...doc().querySelectorAll('.diff-row:not(.added) .diff-text')].map(x=>x.textContent).join('\n') === REFLOW.body_change.before.preview, 'Unicode before text preserved');
+ assert([...doc().querySelectorAll('.diff-row:not(.removed) .diff-text')].map(x=>x.textContent).join('\n') === REFLOW.body_change.after.preview, 'Unicode after text preserved');
  await result({completed:[{knowledge_change:REFLOW}]}); await wait();
  assert(el('overview').textContent.includes('Resource retry policy'), 'batch readable title');
  el('toggle').click(); await wait();
@@ -267,20 +272,44 @@ const result = async (value, error=false) => {reply({method:'ui/notifications/to
         script += '\nframe.srcdoc = ' + json.dumps(html()) + ';'
         self.run_browser(script)
 
+    def test_real_pointer_disclosure_preserves_reading_anchor(self):
+        change = receipt.for_create({'file_path': 'Notes/routes.md',
+                                     'content': '\n'.join('Route ' + str(i) for i in range(96))})
+        script = 'const CHANGE=' + json.dumps(change) + ';' + r"""
+const frame=document.querySelector('iframe');
+const send=data=>frame.contentWindow.postMessage({jsonrpc:'2.0',...data},'*');
+const wait=()=>new Promise(resolve=>setTimeout(resolve,70));
+let initialized;const ready=new Promise(resolve=>initialized=resolve);
+window.addEventListener('message',event=>{if(event.source!==frame.contentWindow)return;const m=event.data;
+ if(m.method==='ui/initialize')send({id:m.id,result:{hostContext:{availableDisplayModes:['inline'],displayMode:'inline'}}});
+ if(m.method==='ui/notifications/initialized')initialized();
+});
+let button,center;
+const assert=(value,label)=>{if(!value)throw Error(label);};
+window.pointerPosition=()=>{const outer=frame.getBoundingClientRect(),rect=button.getBoundingClientRect();return {x:outer.left+frame.clientLeft+rect.left+rect.width/2,y:outer.top+frame.clientTop+rect.top+rect.height/2};};
+window.preparePointer=async width=>{frame.style.width=width+'px';send({method:'ui/notifications/tool-result',params:{structuredContent:{knowledge_change:CHANGE}}});await wait();
+ button=frame.contentDocument.querySelector('.fold-seam');assert(button,'fold present');button.scrollIntoView({block:'center'});center=window.pointerPosition().y;return window.pointerPosition();};
+window.assertPointer=open=>{const doc=frame.contentDocument;assert(button.isConnected,'same control DOM');assert(doc.activeElement===button,'focus retained');assert(button.getAttribute('aria-expanded')===String(open),'disclosure state');assert(Math.abs(window.pointerPosition().y-center)<=1,'reading anchor retained');
+ if(open){const block=button.closest('.diff-disclosure'),row=block.querySelector('.fold-content .diff-row');assert(Math.abs(row.getBoundingClientRect().top-button.getBoundingClientRect().top)<=1,'revealed row replaces seam');assert(getComputedStyle(block.querySelector('.fold-label')).display==='none','no expanded missing-content row');}};
+ready.then(()=>document.getElementById('outcome').textContent='POINTER_READY');
+"""
+        script += '\nframe.srcdoc=' + json.dumps(html()) + ';'
+        self.run_browser(script)
+
     def run_browser(self, script):
         with tempfile.TemporaryDirectory(prefix='kajamite-ui-') as directory:
             page = Path(directory) / 'host.html'
             page.write_text('<!doctype html><meta charset="utf-8"><iframe style="width:640px;height:800px"></iframe>'
                             '<pre id="outcome">RUNNING</pre><script>' + script.replace('</script', '<\\/script') + '</script>', encoding='utf-8')
+            node = shutil.which('node')
+            self.assertIsNotNone(node, 'Node 22 is required for browser acceptance')
+            runner = Path(__file__).with_name('browser_runner.mjs')
             completed = subprocess.run([
-                os.environ['KAJAMITE_BROWSER'], '--headless', '--no-sandbox', '--disable-gpu',
-                '--disable-dev-shm-usage', '--no-proxy-server', '--no-first-run',
-                '--user-data-dir=' + str(Path(directory) / 'profile'),
-                '--virtual-time-budget=9000', '--dump-dom', page.as_uri(),
+                node, str(runner), os.environ['KAJAMITE_BROWSER'], page.as_uri(),
+                str(Path(directory) / 'profile'),
             ], capture_output=True, text=True, timeout=45)
             self.assertEqual(0, completed.returncode, completed.stderr[-1000:])
-            outcome = completed.stdout.split('<pre id="outcome">', 1)[-1].split('</pre>', 1)[0]
-            self.assertEqual('BROWSER_ACCEPTANCE_OK', html_module.unescape(outcome))
+            self.assertEqual('BROWSER_ACCEPTANCE_OK', completed.stdout.strip())
 
     def test_themes_apply_without_rebuilding_or_external_requests(self):
         first = html({'light': {'primary': '#123456', 'radius': '0.5rem'},
@@ -380,7 +409,7 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  const result=async value=>{send({method:'ui/notifications/tool-result',params:{structuredContent:value}});await wait();};
  await result({knowledge_change:CHANGES[0]});
  assert(el('subject').textContent.includes('Conference'),'named subject');
- assert(el('overview').textContent.includes('Status: draft → confirmed'),'field labeled in summary');
+ assert(el('overview').textContent.includes('Status') && el('overview').textContent.includes('draft') && el('overview').textContent.includes('confirmed'),'field labeled in summary');
  assert(!el('overview').textContent.includes('revision'),'counter excluded');
  assert(el('counts').textContent==='1 note · 1 field update' && !el('overview').textContent.includes('synthetic-replay-marker'),'bookkeeping excluded from review count');
  el('toggle').click();await wait();assert(el('changes').textContent.includes('Status'),'field labeled in details');
@@ -393,7 +422,7 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  await result({completed:[{knowledge_change:CHANGES[2]}],errors:[],partial:false});
  assert(el('overview').textContent.includes('Audit information updated') && !el('overview').textContent.includes('No notes changed'), 'batch audit-only save remains explicit');
  await result({knowledge_change:CHANGES[3]});
- assert(el('overview').textContent.includes('Scope · Product: Alpha → Beta') && el('overview').textContent.includes('Needs revalidation'),'semantic scope and readable status visible');
+ assert(el('overview').textContent.includes('Scope · Product') && el('overview').textContent.includes('Alpha') && el('overview').textContent.includes('Beta') && el('overview').textContent.includes('Needs revalidation'),'semantic scope and readable status visible');
  assert(!el('overview').textContent.includes('Kajamite record'),'record JSON excluded only with projection');
  el('toggle').click();await wait();
  assert(el('changes').textContent.includes('Scope · Product') && !el('changes').textContent.includes('Kajamite record'),'semantic detail rows');
@@ -402,7 +431,7 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  await result({knowledge_change:CHANGES[4]});
  assert(el('overview').textContent.includes('Kajamite record'),'legacy record metadata remains reviewable');
  await result({completed:[{knowledge_change:CHANGES[3]}],errors:[],partial:false});
- assert(el('overview').textContent.includes('Scope · Product: Alpha → Beta') && !el('overview').textContent.includes('Kajamite record'),'maintenance uses semantic projection');
+ assert(el('overview').textContent.includes('Scope · Product') && el('overview').textContent.includes('Alpha') && el('overview').textContent.includes('Beta') && !el('overview').textContent.includes('Kajamite record'),'maintenance uses semantic projection');
  assert(el('status').textContent==='1 saved note needs revalidation.' && !el('status').hidden,'maintenance state consequence remains prominent');
  const group=Array.from({length:5},(_,i)=>({knowledge_change:{...CHANGES[3],after:{...CHANGES[3].after,identifier:`Notes/dependent-${i}.md`}}}));
  await result({completed:[...group,group[0],{...group[1],replayed:true}],errors:[],partial:false});
@@ -416,15 +445,15 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  await result({knowledge_change:CHANGES[1]});
  assert(el('overview').textContent.includes('Monday')&&el('overview').textContent.includes('Tuesday'),'summary reaches changed words after long shared prefix');
  el('toggle').click();await wait();
- const full=Array.from(doc().querySelectorAll('button')).find(b=>b.textContent==='Show full excerpt');
- assert(full,'long excerpt bounded');full.click();await wait();assert(el('changes').textContent.includes('Tuesday'),'full excerpt reachable');
+ const full=doc().querySelector('.comparison-frame');
+ assert(full && el('changes').textContent.includes('Tuesday'),'long source lines wrap in full');
  await result({knowledge_change:CHANGES[5]});
  assert(el('counts').textContent==='1 note · 1 text edit · 2 field updates','text edits separated from supporting fields');
  assert(el('overview').textContent.includes('other entries that still refer to it.'),'bounded paragraph retains final qualification');
- assert(el('overview').textContent.includes('1 field update in details'),'remaining fields are not extra passage edits');
+ assert(el('changes').querySelectorAll('.entry-label').length===2,'supporting fields remain separately named');
  frame.style.width='320px';await wait();el('toggle').click();await wait();
- const row=doc().querySelector('.diff-line');
- assert(frame.contentWindow.getComputedStyle(row).gridTemplateColumns.split(' ').length===1,'narrow diff labels stack above text');
+ const row=doc().querySelector('.diff-row');
+ assert(frame.contentWindow.getComputedStyle(row).gridTemplateColumns.split(' ').length===4,'narrow diff retains stable line gutters');
  const longId='source-'+'x'.repeat(115)+'-00';
  await result({knowledge_change:{...CHANGES[3],record_changes:[{key:'evidence',message:`12 added: ${longId} (+11 more). Exact values are in the raw receipt.`}]}});
  assert(doc().body.scrollWidth<=doc().documentElement.clientWidth,'collapsed long identifier summary stays inside narrow frame');
@@ -436,7 +465,7 @@ window.addEventListener('message',e=>{if(e.source!==frame.contentWindow)return;
  assert(doc().body.scrollWidth<=doc().documentElement.clientWidth,'expanded JSON field values wrap');
  frame.style.width='760px';await wait();
  await result({completed:[{knowledge_change:CHANGES[0]}],errors:[{identifier:'Plans/Other.md',error:'Revision conflict'}],partial:true});
- assert(doc().body.textContent.includes('Other: Revision conflict')&&el('review').hidden,'failure visible without opening');
+ assert(doc().body.textContent.includes('Other') && doc().body.textContent.includes('Revision conflict')&&el('review').hidden,'failure visible without opening');
  document.getElementById('outcome').textContent='BROWSER_ACCEPTANCE_OK';
 })().catch(e=>document.getElementById('outcome').textContent='FAILED: '+e.message);
 '''

@@ -118,7 +118,7 @@ export function createBridge(theme: Theme) {
     "ui/initialize",
     {
       protocolVersion: "2026-01-26",
-      appInfo: { name: "kajamite-knowledge-change", version: "3.0.0" },
+      appInfo: { name: "kajamite-knowledge-change", version: "4.0.0" },
       appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
     },
     10000,

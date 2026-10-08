@@ -774,3 +774,27 @@ is false. Complete history remains available through explicit inspection reads.
 A clipped governed preview has no paging cursor; callers can request the complete
 current record. Full native commissioning passes mixed inspection budgeting.
 The read/search/list/context/related schemas expose reuse and inspect explicitly.
+
+## Shared comparison release
+
+Version 0.8.0 adds shared inline/detail line comparison, word-level highlights,
+local disclosure with stable focus and reading position, wrapped source text,
+unified/split layouts and updated UI resource identity. The knowledge engine,
+receipt schema and journal format are unchanged.
+
+Frontend formatting, TypeScript and reproducible bundle checks pass. Sequence
+validation preserves exact source and token strings across Unicode, whitespace,
+empty values, multiline reflow and the large-input fallback. Browser acceptance
+uses real-time Chrome DevTools Protocol through the pinned Node development
+runtime. Synthetic host tests retain digest/identity checks, delayed result
+ordering, complete claim binding, host refusal/timeouts, themes, source escaping,
+semantic fields, partial outcomes and narrow layouts. Pointer and keyboard
+checks verify focused-control identity and reading anchors in the packaged UI.
+
+The current pinned build tools have development-only denial-of-service advisories
+in `braces` and `source-map-js`. Watcher and source-map packages are not bundled
+in the released browser runtime. Builds operate on reviewed repository inputs;
+no frontend dependency update is included in this release.
+
+Native host rendering remains a separate observation; synthetic host acceptance
+does not establish every client’s placement or accessibility behavior.

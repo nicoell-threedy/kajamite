@@ -6,7 +6,7 @@ import hashlib
 from .theme import validate_theme
 
 
-RESOURCE_URI = "ui://kajamite/knowledge-change/v3.html"
+RESOURCE_URI = "ui://kajamite/knowledge-change/v4.html"
 
 
 def html(theme=None) -> str:
@@ -20,4 +20,4 @@ def resource_uri(theme=None) -> str:
     if not any(normalized.values()):
         return RESOURCE_URI
     digest = hashlib.sha256(json.dumps(normalized, sort_keys=True).encode()).hexdigest()[:16]
-    return RESOURCE_URI.replace("v3.html", f"v3-{digest}.html")
+    return RESOURCE_URI.replace("v4.html", f"v4-{digest}.html")
