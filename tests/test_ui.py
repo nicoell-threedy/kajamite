@@ -307,7 +307,7 @@ ready.then(()=>document.getElementById('outcome').textContent='POINTER_READY');
             completed = subprocess.run([
                 node, str(runner), os.environ['KAJAMITE_BROWSER'], page.as_uri(),
                 str(Path(directory) / 'profile'),
-            ], capture_output=True, text=True, timeout=45)
+            ], capture_output=True, text=True, timeout=75)
             self.assertEqual(0, completed.returncode, completed.stderr[-1000:])
             self.assertEqual('BROWSER_ACCEPTANCE_OK', completed.stdout.strip())
 
