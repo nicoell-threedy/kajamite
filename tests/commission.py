@@ -53,6 +53,15 @@ async def wait_for_indexed_path(backend, query, identifier, attempts=120):
     raise AssertionError(f"native search index did not expose {identifier!r} after {attempts} attempts")
 
 
+def backend_command(command):
+    """Track the backend Python process directly on Windows venv installs."""
+    if sys.platform == "win32" and Path(command).suffix.lower() == ".exe":
+        python = Path(command).with_name("python.exe")
+        if python.is_file():
+            return [str(python), "-c", "from basic_memory.cli.main import app; app()"]
+    return [command]
+
+
 def prepare(root, command):
     env = os.environ | {
         "BASIC_MEMORY_CONFIG_DIR": str(root / "backend-config"),
@@ -63,12 +72,13 @@ def prepare(root, command):
     }
     wiki = root / "notes"
     wiki.mkdir(exist_ok=True)
-    result = subprocess.run([command, "project", "add", "acceptance", str(wiki)], env=env, capture_output=True, text=True)
+    argv = backend_command(command)
+    result = subprocess.run([*argv, "project", "add", "acceptance", str(wiki)], env=env, capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError("Isolated backend project setup failed: " + result.stderr[-1500:])
     config = root / "kajamite.toml"
     values = {key: value for key, value in env.items() if key.startswith("BASIC_MEMORY_")}
-    config.write_text(f'state_dir = {json.dumps(str(root / "locks"))}\n[backend]\ncommand = {json.dumps(command)}\nargs = ["mcp", "--project", "acceptance"]\nproject = "acceptance"\ntimeout = 90\n[backend.env]\n' + "\n".join(f'{key} = {json.dumps(value)}' for key, value in values.items()), encoding="utf-8")
+    config.write_text(f'state_dir = {json.dumps(str(root / "locks"))}\n[backend]\ncommand = {json.dumps(argv[0])}\nargs = {json.dumps([*argv[1:], "mcp", "--project", "acceptance"])}\nproject = "acceptance"\ntimeout = 90\n[backend.env]\n' + "\n".join(f'{key} = {json.dumps(value)}' for key, value in values.items()), encoding="utf-8")
     return config, wiki
 
 

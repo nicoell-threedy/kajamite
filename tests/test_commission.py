@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import commission
@@ -45,3 +47,18 @@ class IndexReadinessTests(unittest.IsolatedAsyncioTestCase):
                     backend, "quasartargetready", "Late/Target.md", attempts=2
                 )
         self.assertEqual(backend.call.await_count, 2)
+
+
+class BackendCommandTests(unittest.TestCase):
+    def test_windows_venv_tracks_python_without_console_launcher(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command = Path(directory) / "basic-memory.exe"
+            python = command.with_name("python.exe")
+            python.touch()
+            with patch.object(commission.sys, "platform", "win32"):
+                self.assertEqual(commission.backend_command(str(command)), [
+                    str(python), "-c", "from basic_memory.cli.main import app; app()"])
+                python.unlink()
+                self.assertEqual(commission.backend_command(str(command)), [str(command)])
+            with patch.object(commission.sys, "platform", "linux"):
+                self.assertEqual(commission.backend_command(str(command)), [str(command)])
