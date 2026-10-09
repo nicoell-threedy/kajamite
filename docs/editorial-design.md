@@ -121,9 +121,10 @@ and page size; another scope rejects it. Each response returns `notes` with the
 canonical identifier, path, permalink when available, title, and complete-body
 `content_sha256`, plus `next_cursor`, `has_more`, `exhausted`, `scanned_notes`,
 and explicit read/list omissions or errors. It is a live bounded scan, not a
-snapshot. Only `exhausted=true` says that this invocation reached the end of
-the selected scope; callers must preserve returned hashes and reread selected
-notes before writing.
+snapshot. Changed native totals restart `next_cursor` at the first page.
+Deduplicate repeated identities. Exhaustion with `partial=true` or
+`index_changed=true` does not establish completeness. Preserve returned hashes
+and reread selected notes before writing.
 
 The initial mechanically reliable candidate is an `exact_duplicate` group:
 two or more successfully read notes in the returned page with equal complete

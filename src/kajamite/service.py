@@ -92,6 +92,7 @@ class NoteOperations:
         seen: set[tuple[str, str, str]] = set()
         scanned = pages = 0
         exhausted = False
+        restart = False
 
         while pages < self._native_page_budget:
             arguments: dict[str, Any] = {
@@ -113,7 +114,8 @@ class NoteOperations:
                 raise KnowledgeError("search_notes returned invalid results")
             total = payload.get("total")
             if type(total) is int and total >= 0:
-                index_changed = index_changed or (native_total is not None and total != native_total)
+                restart = restart or (native_total is not None and total != native_total)
+                index_changed = index_changed or restart
                 native_total = total
             pages += 1
             stopped = False
@@ -146,6 +148,9 @@ class NoteOperations:
             skip = 0
 
         scan_limited = pages == self._native_page_budget and not exhausted
+        if restart:
+            # Changed totals invalidate offsets; let the caller restart within the same budget.
+            offset, exhausted = 0, False
         return {
             "results": results,
             "next_cursor": None if exhausted else self._encode_cursor(offset, fingerprint, native_total, index_changed),

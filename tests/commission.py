@@ -181,8 +181,14 @@ async def run(config, wiki):
         service = KnowledgeEngine(backend)
         first = await service.search(namespaces=["Late"], query="quasar")
         assert not first["results"] and first["has_more"] and first["scan_limited"], {"result": first, "native_pages": native_pages}
-        later = await service.search(namespaces=["Late"], query="quasar", cursor=first["next_cursor"])
-        assert [row["identifier"] for row in later["results"]] == ["Late/Target.md"], {"result": later, "native_pages": native_pages}
+        later = first
+        identifiers = set()
+        for _ in range(5):
+            later = await service.search(namespaces=["Late"], query="quasar", cursor=later["next_cursor"])
+            identifiers.update(row["identifier"] for row in later["results"])
+            if later["exhausted"]:
+                break
+        assert identifiers == {"Late/Target.md"}, {"result": later, "native_pages": native_pages}
         assert later["exhausted"], later
     return {"status": "passed", "checks": ["multi-note namespaces", "same-title separation", "deterministic mutation receipts", "plain-text receipt fallback", "metadata-only edits", "concurrent writers", "collision refusal", "note and namespace moves", "search by moved path", "bounded shared context", "bounded collection inspection", "plain Markdown", "native FTS continuation beyond 250 outside hits"]}
 

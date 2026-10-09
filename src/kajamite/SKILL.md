@@ -111,8 +111,9 @@ affected notes. knowledge_related gives bounded native graph context; it does
 not prove all references or backlinks were found. Use
 knowledge_inspect_collection for a live bounded inventory of ordinary notes,
 their complete-body hashes, omissions, continuation, and page-scoped exact
-duplicate candidates. Only exhausted=true establishes completion for that
-invocation. Compare notes by their purpose and independently useful material,
+duplicate candidates. Follow next_cursor after changed totals restart the scan,
+and deduplicate repeated identities. An exhausted scan with partial=true or
+index_changed=true remains incomplete. Compare notes by their purpose and independently useful material,
 not length, age, heading count, or sparse links.
 
 Choose a canonical explanation only after review. Integrate useful material into

@@ -407,26 +407,33 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
                 self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")
                                             for i in range(count)]
                 native = self.backend.call
+                changed = False
 
                 async def changing(name, arguments):
-                    result = await native(name, arguments)
-                    if name == "search_notes" and arguments["page"] > 1:
-                        result["total"] -= 1
-                    return result
+                    nonlocal changed
+                    if name == "search_notes" and arguments["page"] > 1 and not changed:
+                        self.backend.search_rows.pop()
+                        changed = True
+                    return await native(name, arguments)
 
                 self.backend.call = changing
                 engine = KnowledgeEngine(self.backend)
                 result = await engine.search(["wanted"], "needle")
                 self.assertTrue(result["index_changed"])
-                if result["next_cursor"]:
+                for _ in range(3):
+                    if not result["next_cursor"]:
+                        break
                     result = await engine.search(["wanted"], "needle", cursor=result["next_cursor"])
                 self.assertTrue(result["exhausted"])
                 self.assertFalse(result["has_more"])
                 self.assertFalse(result["complete_scope_search"])
                 self.assertTrue(result["index_changed"])
                 self.assertTrue(result["partial"])
+                changed = False
                 inventory = await engine.inspect_collection("wanted")
-                if inventory["next_cursor"]:
+                for _ in range(3):
+                    if not inventory["next_cursor"]:
+                        break
                     inventory = await engine.inspect_collection("wanted", cursor=inventory["next_cursor"])
                 self.assertTrue(inventory["partial"])
                 self.assertTrue(inventory["index_changed"])
@@ -441,6 +448,9 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         last = await self.service.search(["wanted"], "needle", cursor=first["next_cursor"])
         self.assertTrue(last["index_changed"])
         self.assertFalse(last["complete_scope_search"])
+        self.assertFalse(last["exhausted"])
+        restarted = json.loads(base64.urlsafe_b64decode(last["next_cursor"] + "=" * (-len(last["next_cursor"]) % 4)))
+        self.assertEqual(restarted["offset"], 0)
         cursor = first["next_cursor"]
         legacy = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
         legacy.pop("native_total")
@@ -452,6 +462,25 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         for fields in ({"native_total": -1}, {"native_total": True}, {"index_changed": "false"}):
             with self.assertRaises(ValueError):
                 await self.service.search(["wanted"], "needle", cursor=encode(legacy | fields))
+
+    async def test_search_restarts_when_a_target_shifts_before_the_cursor(self):
+        self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")
+                                    for i in range(250)]
+        self.backend.search_rows.append(FakeBackend._note("wanted/target.md", "Target", "needle"))
+        first = await self.service.search(["wanted"], "needle")
+        self.assertEqual(first["results"], [])
+        self.assertTrue(first["scan_limited"])
+        self.backend.search_rows.pop(0)
+        shifted = await self.service.search(["wanted"], "needle", cursor=first["next_cursor"])
+        self.assertEqual(shifted["results"], [])
+        self.assertTrue(shifted["has_more"])
+        self.assertTrue(shifted["index_changed"])
+        recovered = await self.service.search(["wanted"], "needle", cursor=shifted["next_cursor"])
+        self.assertEqual([row["identifier"] for row in recovered["results"]], ["wanted/target.md"])
+        self.assertTrue(recovered["exhausted"])
+        self.assertFalse(recovered["complete_scope_search"])
+        calls = [args for name, args in self.backend.calls if name == "search_notes"]
+        self.assertEqual([args["page"] for args in calls], [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5])
 
     async def test_search_missing_totals_do_not_invent_a_change(self):
         self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")

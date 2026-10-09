@@ -153,7 +153,10 @@ same search arguments and cursor before concluding there are no matches.
 This supports late matches without a second index or copied membership metadata.
 It is not scoped semantic search, and broad sparse queries may take several
 calls. Cursors are live pagination, not immutable snapshots: concurrent backend
-changes can change ranking. Lists use native page pagination. Context budgets
+changes can change ranking. When native totals change, the continuation cursor
+restarts at the first page to recover matches that shifted before the old offset.
+Earlier matches can repeat; deduplicate accumulated identities. `index_changed`
+remains set and completeness remains withheld. Lists use native page pagination. Context budgets
 cover note-body characters; structured metadata and listing overhead are separate.
 
 `knowledge_inspect_collection` wraps the same bounded native retrieval with an
