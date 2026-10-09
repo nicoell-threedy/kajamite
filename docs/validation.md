@@ -2,8 +2,10 @@
 
 ## Search continuation after native index changes
 
-Changed native totals invalidate ranked offsets. The returned cursor restarts
-at the first page, with the same query, scope, and per-call page budget.
+Changed native totals invalidate ranked offsets. At the end of traversal, the
+returned cursor restarts at the first page, with the same query, scope, and
+per-call page budget. The cursor preserves recovery between calls. A separate
+oscillating-total control checks that later pages progress before recovery.
 The changed-index warning remains set. Repeated identities require caller
 deduplication, and exhaustion does not establish a stable snapshot.
 
@@ -12,7 +14,7 @@ then moves before the saved offset. The 0.8.0 baseline ends with no target;
 the corrected continuation returns it. Existing changed-total, legacy-cursor,
 filter-binding, and bounded-scan checks remain intact.
 
-On Windows Python 3.12, the source suite runs 123 tests: 117 pass and six skip.
+On Windows Python 3.12, the source suite runs 124 tests: 118 pass and six skip.
 All five browser checks pass separately. The UI source and shipped bundle are
 unchanged. Native indexing duplicates and equal-total changes remain backend
 limitations; this correction does not repair the backend index.

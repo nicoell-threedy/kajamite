@@ -455,11 +455,12 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         legacy = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
         legacy.pop("native_total")
         legacy.pop("index_changed")
+        legacy.pop("restart")
         encode = lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
         last = await self.service.search(["wanted"], "needle", cursor=encode(legacy))
         self.assertFalse(last["index_changed"])
         self.assertTrue(last["complete_scope_search"])
-        for fields in ({"native_total": -1}, {"native_total": True}, {"index_changed": "false"}):
+        for fields in ({"native_total": -1}, {"native_total": True}, {"index_changed": "false"}, {"restart": "false"}):
             with self.assertRaises(ValueError):
                 await self.service.search(["wanted"], "needle", cursor=encode(legacy | fields))
 
@@ -481,6 +482,32 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(recovered["complete_scope_search"])
         calls = [args for name, args in self.backend.calls if name == "search_notes"]
         self.assertEqual([args["page"] for args in calls], [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5])
+
+    async def test_changed_totals_do_not_starve_later_pages_before_recovery(self):
+        self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")
+                                    for i in range(250)]
+        self.backend.search_rows.append(FakeBackend._note("wanted/target.md", "Target", "needle"))
+        native = self.backend.call
+
+        async def changing(name, arguments):
+            result = await native(name, arguments)
+            if name == "search_notes":
+                result["total"] += arguments["page"] % 2
+            return result
+
+        self.backend.call = changing
+        first = await self.service.search(["wanted"], "needle")
+        cursor = json.loads(base64.urlsafe_b64decode(first["next_cursor"] + "=" * (-len(first["next_cursor"]) % 4)))
+        self.assertEqual(cursor["offset"], 250)
+        self.assertTrue(cursor["restart"])
+        later = await self.service.search(["wanted"], "needle", cursor=first["next_cursor"])
+        self.assertEqual([row["identifier"] for row in later["results"]], ["wanted/target.md"])
+        self.assertTrue(later["has_more"])
+        self.assertFalse(later["exhausted"])
+        self.assertTrue(later["index_changed"])
+        cursor = json.loads(base64.urlsafe_b64decode(later["next_cursor"] + "=" * (-len(later["next_cursor"]) % 4)))
+        self.assertEqual(cursor["offset"], 0)
+        self.assertFalse(cursor["restart"])
 
     async def test_search_missing_totals_do_not_invent_a_change(self):
         self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")

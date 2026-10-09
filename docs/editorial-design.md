@@ -121,7 +121,8 @@ and page size; another scope rejects it. Each response returns `notes` with the
 canonical identifier, path, permalink when available, title, and complete-body
 `content_sha256`, plus `next_cursor`, `has_more`, `exhausted`, `scanned_notes`,
 and explicit read/list omissions or errors. It is a live bounded scan, not a
-snapshot. Changed native totals restart `next_cursor` at the first page.
+snapshot. Changed native totals require recovery after traversal ends.
+The cursor then restarts at the first page.
 Deduplicate repeated identities. Exhaustion with `partial=true` or
 `index_changed=true` does not establish completeness. Preserve returned hashes
 and reread selected notes before writing.

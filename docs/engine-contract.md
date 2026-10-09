@@ -193,7 +193,8 @@ A ranked candidate set cannot prove that no relevant knowledge exists.
 Collection inspection is an explicit, live, bounded namespace scan. Its cursor
 is scoped to the selected namespace, recursion setting, and page size; results identify the
 notes actually read and their complete-body hashes, continuation, and omissions.
-Changed native totals restart the cursor at the first page. Callers deduplicate
+Changed native totals require recovery after traversal ends. The cursor then
+restarts at the first page. Callers deduplicate
 repeated identities. Exhaustion with `partial=true` or `index_changed=true`
 does not establish completeness. Exact equal bodies are
 candidates for caller review, not automatic consolidation; the engine makes no
