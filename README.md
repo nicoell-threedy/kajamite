@@ -154,10 +154,11 @@ This supports late matches without a second index or copied membership metadata.
 It is not scoped semantic search, and broad sparse queries may take several
 calls. Cursors are live pagination, not immutable snapshots: concurrent backend
 changes can change ranking. Changed native totals require a recovery pass.
-At the end of traversal, the continuation cursor restarts at the first page.
+At the end of traversal, the continuation cursor starts one recovery pass at the first page.
 This pass recovers matches that shifted before the old offset.
 Earlier matches can repeat; deduplicate accumulated identities. `index_changed`
-remains set and completeness remains withheld. Lists use native page pagination. Context budgets
+remains set and completeness remains withheld, including further changes during recovery.
+Recovery does not repeat automatically. Lists use native page pagination. Context budgets
 cover note-body characters; structured metadata and listing overhead are separate.
 
 `knowledge_inspect_collection` wraps the same bounded native retrieval with an

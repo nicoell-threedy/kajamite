@@ -456,11 +456,12 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         legacy.pop("native_total")
         legacy.pop("index_changed")
         legacy.pop("restart")
+        legacy.pop("recovering")
         encode = lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
         last = await self.service.search(["wanted"], "needle", cursor=encode(legacy))
         self.assertFalse(last["index_changed"])
         self.assertTrue(last["complete_scope_search"])
-        for fields in ({"native_total": -1}, {"native_total": True}, {"index_changed": "false"}, {"restart": "false"}):
+        for fields in ({"native_total": -1}, {"native_total": True}, {"index_changed": "false"}, {"restart": "false"}, {"recovering": "false"}):
             with self.assertRaises(ValueError):
                 await self.service.search(["wanted"], "needle", cursor=encode(legacy | fields))
 
@@ -508,6 +509,12 @@ class KnowledgeServiceTests(unittest.IsolatedAsyncioTestCase):
         cursor = json.loads(base64.urlsafe_b64decode(later["next_cursor"] + "=" * (-len(later["next_cursor"]) % 4)))
         self.assertEqual(cursor["offset"], 0)
         self.assertFalse(cursor["restart"])
+        self.assertTrue(cursor["recovering"])
+        for _ in range(2):
+            later = await self.service.search(["wanted"], "needle", cursor=later["next_cursor"])
+        self.assertTrue(later["exhausted"])
+        self.assertIsNone(later["next_cursor"])
+        self.assertFalse(later["complete_scope_search"])
 
     async def test_search_missing_totals_do_not_invent_a_change(self):
         self.backend.search_rows = [FakeBackend._note(f"outside/{i}.md", str(i), "needle")

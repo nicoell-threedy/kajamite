@@ -6,6 +6,7 @@ Changed native totals invalidate ranked offsets. At the end of traversal, the
 returned cursor restarts at the first page, with the same query, scope, and
 per-call page budget. The cursor preserves recovery between calls. A separate
 oscillating-total control checks that later pages progress before recovery.
+Recovery runs once; further changes remain partial without endless rescans.
 The changed-index warning remains set. Repeated identities require caller
 deduplication, and exhaustion does not establish a stable snapshot.
 
@@ -18,6 +19,10 @@ On Windows Python 3.12, the source suite runs 124 tests: 118 pass and six skip.
 All five browser checks pass separately. The UI source and shipped bundle are
 unchanged. Native indexing duplicates and equal-total changes remain backend
 limitations; this correction does not repair the backend index.
+
+A native deletion control moves the target before the saved offset. Windows
+and Linux Python 3.12 both recover it in two continuations. Both traversals
+finish with `partial=true` and `complete_scope_search=false`.
 
 ## Search and collection descriptions
 

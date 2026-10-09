@@ -67,12 +67,13 @@ and collection inspection partial. Exhaustion does not establish absence from
 a changing index. Equal or
 missing totals cannot prove stability. Legacy cursors have no earlier total to
 compare. A changed total invalidates the offset. At the end of traversal,
-`next_cursor` restarts at the first native page, and `exhausted=false` keeps
+`next_cursor` starts one recovery pass at the first native page, and `exhausted=false` keeps
 traversal open. The cursor preserves this recovery requirement between calls.
 Deferred recovery lets later pages progress during index changes. Callers follow it
 explicitly within the unchanged per-call scan budget. Earlier matches can repeat;
 deduplicate accumulated identities. The changed-index warning remains set after
-recovery, so exhaustion does not certify a snapshot.
+recovery, so exhaustion does not certify a snapshot. Further changes during
+recovery retain that warning without another recovery pass.
 
 ## Context and mutations
 
